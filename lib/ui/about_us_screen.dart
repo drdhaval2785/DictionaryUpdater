@@ -13,7 +13,11 @@ class AboutUsScreen extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Icon(Icons.info_outline, size: 80, color: Colors.blue),
+            const Text(
+              '🙏',
+              style: TextStyle(fontSize: 80),
+              textAlign: TextAlign.center,
+            ),
             const SizedBox(height: 24),
             Text(
               'Stardict Dictionary Updater',
@@ -30,7 +34,7 @@ class AboutUsScreen extends StatelessWidget {
                 borderRadius: BorderRadius.circular(12),
               ),
               child: const Text(
-                'Vibe coded by Dr. Dhaval Patel (drdhaval2785@gmail.com). Dedicated to lexicographers across ages and places.',
+                'Vibe coded by Dr. Dhaval Patel (drdhaval2785@gmail.com).\n\nDedicated to lexicographers across ages and places.',
                 style: TextStyle(fontSize: 16, height: 1.5),
                 textAlign: TextAlign.center,
               ),

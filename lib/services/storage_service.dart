@@ -41,9 +41,10 @@ class StorageService {
     if (Platform.isAndroid || Platform.isIOS) {
       base = await getApplicationDocumentsDirectory();
     } else {
-      final downloadsDir = await getDownloadsDirectory();
-      if (downloadsDir != null) {
-        base = downloadsDir;
+      // For desktop, bypass sandbox abstractions to get the REAL Downloads folder.
+      final home = Platform.environment['HOME'] ?? Platform.environment['USERPROFILE'];
+      if (home != null) {
+        base = Directory(p.join(home, 'Downloads'));
       } else {
         base = await getApplicationSupportDirectory();
       }

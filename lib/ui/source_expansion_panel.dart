@@ -86,7 +86,7 @@ final sourceItemsProvider = AutoDisposeAsyncNotifierProviderFamily<
 
 final downloadStateProvider = StateProvider.autoDispose
     .family<DownloadBatchState, DictionarySource>(
-  (_, __) => const DownloadBatchState(),
+  (ref, arg) => const DownloadBatchState(),
 );
 
 class SourceItemsNotifier extends AutoDisposeFamilyAsyncNotifier<

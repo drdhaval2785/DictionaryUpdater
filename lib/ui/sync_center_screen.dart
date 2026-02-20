@@ -108,7 +108,7 @@ class SyncCenterScreen extends ConsumerWidget {
   Widget _buildShimmer() {
     return ListView.builder(
       itemCount: 4,
-      itemBuilder: (_, __) => Shimmer.fromColors(
+      itemBuilder: (context, index) => Shimmer.fromColors(
         baseColor: Colors.grey[300]!,
         highlightColor: Colors.grey[100]!,
         child: Card(

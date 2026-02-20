@@ -88,7 +88,7 @@ class SourceDetailScreen extends ConsumerWidget {
               },
             ),
             loading: () => const SizedBox.shrink(),
-            error: (_, __) => const SizedBox.shrink(),
+            error: (err, stack) => const SizedBox.shrink(),
           ),
         ],
       ),
@@ -131,7 +131,7 @@ class SourceDetailScreen extends ConsumerWidget {
               : null;
         },
         loading: () => null,
-        error: (_, __) => null,
+        error: (err, stack) => null,
       ),
     );
   }
