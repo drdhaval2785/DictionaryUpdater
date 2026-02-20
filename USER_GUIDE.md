@@ -16,18 +16,20 @@ By default, dictionaries are stored in:
 You can override this path in **Settings** using the directory picker.
 
 ## Adding Custom Sources
-1. Go to the **Sync Center**.
-2. Click **Add Source**.
+1. Go to the **Stardict Sources** screen.
+2. Click the **+** (Add) icon in the top right.
 3. You can either:
-   - Provide a **URL** to a remote Markdown/text file.
-   - **Upload a local file** containing dictionary download links.
+   - Provide a **URL/Webpage** to a remote Markdown/text file.
+   - **Select Local File** containing dictionary download links.
+   - **Paste List** of URLs directly into a textbox.
 
-## Smart Selection Logic
-When browsing a dictionary source:
-- **New** dictionaries (not yet downloaded) are **selected by default**.
-- **Update Available** dictionaries (newer version found via HEAD request) are **selected by default**.
+## Smart Selection & Downloading
+When expanding a dictionary source card:
+- **New** dictionaries are **selected by default**.
+- **Update Available** dictionaries are **selected by default**.
 - **Up to Date** dictionaries are **unselected by default**.
-This allows for a "one-click" update experience. You can manually toggle selections using the checkboxes/radio markers.
+
+You can download dictionaries source-by-source or use the **Global Download Button** at the bottom of the screen to download all selected dictionaries across all your sources in one batch. Download progress is shown for each file and the overall batch.
 
 ## Development Tip
 Run `flutter analyze` to ensure code quality.

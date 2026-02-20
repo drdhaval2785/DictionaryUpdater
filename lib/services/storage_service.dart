@@ -33,11 +33,21 @@ class StorageService {
   /// Resets to the platform default.
   Future<void> resetToDefault() => _prefs.remove(_storagePathKey);
 
-  /// Platform-safe default using ApplicationSupport directory.
-  /// This directory is ALWAYS writable without special permissions on every
-  /// platform Flutter supports (macOS sandbox, Android, iOS, Windows, Linux).
+  /// Platform-safe default:
+  /// - Mobile (Android/iOS): getApplicationDocumentsDirectory
+  /// - Desktop (macOS, Windows, Linux): ~/Downloads/StarDictData
   Future<Directory> getDefaultStorageDirectory() async {
-    final base = await getApplicationSupportDirectory();
+    Directory base;
+    if (Platform.isAndroid || Platform.isIOS) {
+      base = await getApplicationDocumentsDirectory();
+    } else {
+      final downloadsDir = await getDownloadsDirectory();
+      if (downloadsDir != null) {
+        base = downloadsDir;
+      } else {
+        base = await getApplicationSupportDirectory();
+      }
+    }
     final dir = Directory(p.join(base.path, _folderName));
     if (!await dir.exists()) {
       await dir.create(recursive: true);

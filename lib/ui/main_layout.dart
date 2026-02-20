@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'sync_center_screen.dart';
 import 'settings_screen.dart';
+import 'user_manual_screen.dart';
+import 'about_us_screen.dart';
 
 class MainLayout extends ConsumerStatefulWidget {
   const MainLayout({super.key});
@@ -16,6 +18,8 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
   final List<Widget> _pages = [
     const SyncCenterScreen(),
     const SettingsScreen(),
+    const UserManualScreen(),
+    const AboutUsScreen(),
   ];
 
   @override
@@ -38,12 +42,22 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
                 NavigationRailDestination(
                   icon: Icon(Icons.sync),
                   selectedIcon: Icon(Icons.sync_alt),
-                  label: Text('Stardict Sources'),
+                  label: Text('Sources'),
                 ),
                 NavigationRailDestination(
                   icon: Icon(Icons.settings),
                   selectedIcon: Icon(Icons.settings_applications),
                   label: Text('Settings'),
+                ),
+                NavigationRailDestination(
+                  icon: Icon(Icons.book),
+                  selectedIcon: Icon(Icons.book_online),
+                  label: Text('Manual'),
+                ),
+                NavigationRailDestination(
+                  icon: Icon(Icons.info),
+                  selectedIcon: Icon(Icons.info_outline),
+                  label: Text('About Us'),
                 ),
               ],
             ),
@@ -64,11 +78,19 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
               destinations: const [
                 NavigationDestination(
                   icon: Icon(Icons.sync),
-                  label: 'Stardict Sources',
+                  label: 'Sources',
                 ),
                 NavigationDestination(
                   icon: Icon(Icons.settings),
                   label: 'Settings',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.book),
+                  label: 'Manual',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.info),
+                  label: 'About',
                 ),
               ],
             ),
