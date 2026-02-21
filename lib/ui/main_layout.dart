@@ -4,6 +4,7 @@ import 'sync_center_screen.dart';
 import 'settings_screen.dart';
 import 'user_manual_screen.dart';
 import 'about_us_screen.dart';
+import 'support_screen.dart';
 
 class MainLayout extends ConsumerStatefulWidget {
   const MainLayout({super.key});
@@ -20,6 +21,7 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
     const SettingsScreen(),
     const UserManualScreen(),
     const AboutUsScreen(),
+    const SupportScreen(),
   ];
 
   @override
@@ -59,6 +61,11 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
                   selectedIcon: Icon(Icons.info_outline),
                   label: Text('About Us'),
                 ),
+                NavigationRailDestination(
+                  icon: Icon(Icons.favorite),
+                  selectedIcon: Icon(Icons.favorite_border),
+                  label: Text('Support Us'),
+                ),
               ],
             ),
           Expanded(
@@ -91,6 +98,10 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
                 NavigationDestination(
                   icon: Icon(Icons.info),
                   label: 'About',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.favorite),
+                  label: 'Support',
                 ),
               ],
             ),
