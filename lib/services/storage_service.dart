@@ -16,14 +16,23 @@ class StorageService {
   StorageService(this._prefs);
 
   /// Returns the active dictionary storage directory, creating it if needed.
-  Future<Directory> getStorageDirectory() async {
+  Future<Directory> getStorageDirectory({String? sourceName}) async {
     final String? custom = _prefs.getString(_storagePathKey);
     if (custom != null && custom.isNotEmpty) {
       final dir = Directory(custom);
-      if (await dir.exists()) return dir;
+      if (await dir.exists()) {
+        if (sourceName != null && sourceName.isNotEmpty) {
+          final subDir = Directory(p.join(dir.path, sanitizeFileName(sourceName)));
+          if (!await subDir.exists()) {
+            await subDir.create(recursive: true);
+          }
+          return subDir;
+        }
+        return dir;
+      }
       // Custom path no longer valid — fall through to default
     }
-    return getDefaultStorageDirectory();
+    return getDefaultStorageDirectory(sourceName: sourceName);
   }
 
   /// Sets a custom storage path (persisted across restarts).
@@ -36,7 +45,7 @@ class StorageService {
   /// Platform-safe default:
   /// - Mobile (Android/iOS): getApplicationDocumentsDirectory
   /// - Desktop (macOS, Windows, Linux): ~/Downloads/StarDictData
-  Future<Directory> getDefaultStorageDirectory() async {
+  Future<Directory> getDefaultStorageDirectory({String? sourceName}) async {
     Directory base;
     if (Platform.isAndroid || Platform.isIOS) {
       base = await getApplicationDocumentsDirectory();
@@ -49,7 +58,13 @@ class StorageService {
         base = await getApplicationSupportDirectory();
       }
     }
-    final dir = Directory(p.join(base.path, _folderName));
+    
+    final basePath = p.join(base.path, _folderName);
+    final String fullPath = (sourceName != null && sourceName.isNotEmpty)
+        ? p.join(basePath, sanitizeFileName(sourceName))
+        : basePath;
+        
+    final dir = Directory(fullPath);
     if (!await dir.exists()) {
       await dir.create(recursive: true);
     }
@@ -58,11 +73,11 @@ class StorageService {
 
   /// Sanitizes a file name to prevent path traversal and invalid characters.
   String sanitizeFileName(String name) =>
-      name.replaceAll(RegExp(r'[<>:"/\\|?*]'), '_');
+      name.replaceAll(RegExp(r'[<>:"/\\|?* ]'), '_');
 
   /// Checks if a dictionary file exists locally.
-  Future<bool> dictionaryExists(String fileName) async {
-    final base = await getStorageDirectory();
+  Future<bool> dictionaryExists(String fileName, {String? sourceName}) async {
+    final base = await getStorageDirectory(sourceName: sourceName);
     return File(p.join(base.path, sanitizeFileName(fileName))).exists();
   }
 }

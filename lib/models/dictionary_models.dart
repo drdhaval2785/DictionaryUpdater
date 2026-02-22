@@ -9,6 +9,8 @@ class DictionaryMetadata {
   @Index(unique: true, replace: true)
   late String name;
 
+  String? sourceName; // Link to the 'label' from DictionarySource
+
   late String remoteUrl;
 
   late String localPath;

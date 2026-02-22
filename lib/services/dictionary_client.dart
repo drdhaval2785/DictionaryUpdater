@@ -134,17 +134,19 @@ class DictionaryClient {
   ///  2. If file exists but no Isar record → upToDate (treat pre-existing files as current)
   ///  3. If remote Last-Modified > local lastUpdated → updateAvailable
   ///  4. Otherwise → upToDate
-  Future<DictionaryStatus> getDictionaryStatus(String url, Isar isar) async {
+  Future<DictionaryStatus> getDictionaryStatus(String url, Isar isar, {String? sourceName}) async {
     final fileName = _storageService.sanitizeFileName(p.basename(url));
-    final fileExists = await _storageService.dictionaryExists(fileName);
+    final fileExists = await _storageService.dictionaryExists(fileName, sourceName: sourceName);
 
     if (!fileExists) return DictionaryStatus.newFile;
 
     // File exists — check if we have metadata
-    final meta = await isar.dictionaryMetadatas
-        .filter()
-        .nameEqualTo(fileName)
-        .findFirst();
+    var query = isar.dictionaryMetadatas.filter().nameEqualTo(fileName);
+    if (sourceName != null && sourceName.isNotEmpty) {
+      query = query.sourceNameEqualTo(sourceName);
+    }
+
+    final meta = await query.findFirst();
 
     if (meta == null) {
       // File is on disk but no metadata — treat as up-to-date to avoid
@@ -167,9 +169,10 @@ class DictionaryClient {
   Future<File> downloadDictionary(
     String url,
     Isar isar, {
+    String? sourceName,
     void Function(double)? onProgress,
   }) async {
-    final dir = await _storageService.getStorageDirectory();
+    final dir = await _storageService.getStorageDirectory(sourceName: sourceName);
     final fileName = _storageService.sanitizeFileName(p.basename(url));
     final savePath = p.join(dir.path, fileName);
 
@@ -197,6 +200,7 @@ class DictionaryClient {
 
       final meta = DictionaryMetadata()
         ..name = fileName
+        ..sourceName = sourceName
         ..remoteUrl = url
         ..localPath = savePath
         ..lastUpdated = remoteModified ?? DateTime.now()

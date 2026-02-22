@@ -99,7 +99,7 @@ class SourceItemsNotifier extends AutoDisposeFamilyAsyncNotifier<
     final urls = await client.parseSourceList(arg.url);
     final items = <DictionaryItem>[];
     for (final url in urls) {
-      final status = await client.getDictionaryStatus(url, isar);
+      final status = await client.getDictionaryStatus(url, isar, sourceName: arg.label);
       items.add(DictionaryItem(
         url: url,
         name: p.basename(url),
@@ -162,6 +162,7 @@ class SourceItemsNotifier extends AutoDisposeFamilyAsyncNotifier<
         await client.downloadDictionary(
           item.url,
           isar,
+          sourceName: arg.label,
           onProgress: (progress) {
             _patch(listIndex,
                 item.copyWith(isDownloading: true, downloadProgress: progress));
