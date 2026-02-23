@@ -153,12 +153,30 @@ class DictionaryClient {
       return DictionaryStatus.upToDate;
     }
 
-    // Try to detect remote update via HEAD request
+    // Try to detect remote update via HEAD request and persist lastChecked
+    final now = DateTime.now();
     final remote = await checkRemoteVersion(url);
+    await isar.writeTxn(() async {
+      final freshMeta = await query.findFirst();
+      if (freshMeta != null) {
+        freshMeta.lastChecked = now;
+        if (remote != null) freshMeta.remoteLastModified = remote;
+        await isar.dictionaryMetadatas.put(freshMeta);
+      }
+    });
     if (remote != null && remote.isAfter(meta.lastUpdated)) {
       return DictionaryStatus.updateAvailable;
     }
     return DictionaryStatus.upToDate;
+  }
+
+  Future<DictionaryMetadata?> getMetadata(String url, Isar isar, {String? sourceName}) async {
+    final fileName = _storageService.sanitizeFileName(p.basename(url));
+    var query = isar.dictionaryMetadatas.filter().nameEqualTo(fileName);
+    if (sourceName != null && sourceName.isNotEmpty) {
+      query = query.sourceNameEqualTo(sourceName);
+    }
+    return query.findFirst();
   }
 
   // ─── Download ──────────────────────────────────────────────────────────────

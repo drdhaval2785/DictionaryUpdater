@@ -19,6 +19,9 @@ class DictionaryMetadata {
 
   DateTime? remoteLastModified;
 
+  /// When the machine last performed a HEAD request to check for upstream changes.
+  DateTime? lastChecked;
+
   bool isDownloaded = false;
 
   String? version;

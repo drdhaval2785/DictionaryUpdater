@@ -15,6 +15,8 @@ class DictionaryItem {
   bool isDownloading;
   double downloadProgress;
   bool isDownloaded;
+  final DateTime? remoteLastModified;
+  final DateTime? lastChecked;
 
   DictionaryItem({
     required this.url,
@@ -24,6 +26,8 @@ class DictionaryItem {
     this.isDownloading = false,
     this.downloadProgress = 0,
     this.isDownloaded = false,
+    this.remoteLastModified,
+    this.lastChecked,
   });
 
   DictionaryItem copyWith({
@@ -41,6 +45,8 @@ class DictionaryItem {
         isDownloading: isDownloading ?? this.isDownloading,
         downloadProgress: downloadProgress ?? this.downloadProgress,
         isDownloaded: isDownloaded ?? this.isDownloaded,
+        remoteLastModified: remoteLastModified,
+        lastChecked: lastChecked,
       );
 }
 
@@ -100,14 +106,17 @@ class SourceItemsNotifier extends AutoDisposeFamilyAsyncNotifier<
     final items = <DictionaryItem>[];
     for (final url in urls) {
       final status = await client.getDictionaryStatus(url, isar, sourceName: arg.label);
+      // Load stored metadata for timestamps
+      final meta = await client.getMetadata(url, isar, sourceName: arg.label);
       items.add(DictionaryItem(
         url: url,
         name: p.basename(url),
         status: status,
-        // Only auto-select files that need action (new or update available)
         isSelected: status == DictionaryStatus.newFile ||
             status == DictionaryStatus.updateAvailable,
         isDownloaded: status == DictionaryStatus.upToDate,
+        remoteLastModified: meta?.remoteLastModified,
+        lastChecked: meta?.lastChecked,
       ));
     }
     return items;
@@ -258,9 +267,7 @@ class _SourceExpansionPanelState extends ConsumerState<SourceExpansionPanel> {
           ],
         ),
         subtitle: Text(
-          widget.source.url.startsWith('data:')
-              ? '(Pasted list)'
-              : widget.source.url,
+          _sourceSubtitle(widget.source),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: const TextStyle(fontSize: 12),
@@ -280,6 +287,13 @@ class _SourceExpansionPanelState extends ConsumerState<SourceExpansionPanel> {
         children: [if (_expanded) _DictionaryList(source: widget.source)],
       ),
     );
+  }
+
+  String _sourceSubtitle(DictionarySource source) {
+    if (!source.url.startsWith('data:')) return source.url;
+    // Detect Indic-dict sources by label prefix
+    if (source.label.startsWith('Indic-dict')) return 'Indic-dict';
+    return '(Pasted list)';
   }
 
   Future<void> _confirmDelete(BuildContext context) async {
@@ -511,7 +525,7 @@ class _DictionaryTile extends ConsumerWidget {
           ? LinearProgressIndicator(
               value: item.downloadProgress > 0 ? item.downloadProgress : null,
               minHeight: 3)
-          : _statusChip(item.status),
+          : _buildSubtitle(item),
       trailing: item.isDownloading ? null : _statusIcon(item.status),
       onTap: isLocked
           ? null
@@ -520,15 +534,53 @@ class _DictionaryTile extends ConsumerWidget {
     );
   }
 
-  Widget _statusChip(DictionaryStatus status) {
-    final (text, color) = switch (status) {
-      DictionaryStatus.newFile => ('New', Colors.green),
-      DictionaryStatus.updateAvailable => ('Update available', Colors.orange),
-      DictionaryStatus.upToDate => ('Up to date', Colors.grey),
+  Widget _buildSubtitle(DictionaryItem item) {
+    final lines = <String>[];
+    // Status label
+    final statusText = switch (item.status) {
+      DictionaryStatus.newFile => 'New',
+      DictionaryStatus.updateAvailable => 'Update available',
+      DictionaryStatus.upToDate => 'Up to date',
     };
-    return Text(text,
-        style: TextStyle(
-            color: color, fontWeight: FontWeight.bold, fontSize: 11));
+    lines.add(statusText);
+    // URL
+    lines.add('(${item.url})');
+    // Upstream last-modified
+    if (item.remoteLastModified != null) {
+      lines.add('Last changed upstream on ${_fmtDt(item.remoteLastModified!)}');
+    }
+    // Machine last checked
+    if (item.lastChecked != null) {
+      lines.add('Machine checked upstream on ${_fmtDt(item.lastChecked!)}');
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: lines
+          .map((l) => Text(l,
+              style: TextStyle(
+                fontSize: 11,
+                color: l.startsWith('New')
+                    ? Colors.green
+                    : l.startsWith('Update')
+                        ? Colors.orange
+                        : Colors.grey,
+                fontWeight: l.startsWith('New') || l.startsWith('Update')
+                    ? FontWeight.bold
+                    : FontWeight.normal,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis))
+          .toList(),
+    );
+  }
+
+  String _fmtDt(DateTime dt) {
+    final local = dt.toLocal();
+    return '${local.year}-'
+        '${local.month.toString().padLeft(2, '0')}-'
+        '${local.day.toString().padLeft(2, '0')} '
+        '${local.hour.toString().padLeft(2, '0')}:'
+        '${local.minute.toString().padLeft(2, '0')}';
   }
 
   Widget _statusIcon(DictionaryStatus status) {

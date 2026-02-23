@@ -229,13 +229,33 @@ class _IndicDictBrowserScreenState extends State<IndicDictBrowserScreen> {
   Future<void> _addToQueue() async {
     final selected = _selectedDicts;
     if (selected.isEmpty) return;
-    final notifier = widget.ref.read(sourcesProvider.notifier);
+
+    // Group by folderPath so dicts from the same source become one entry
+    final groups = <String, List<_DictEntry>>{};
     for (final e in selected) {
-      await notifier.addSource(e.url, e.folderPath);
+      groups.putIfAbsent(e.folderPath, () => []).add(e);
     }
+
+    final notifier = widget.ref.read(sourcesProvider.notifier);
+    for (final entry in groups.entries) {
+      final folderPath = entry.key;
+      final dicts = entry.value;
+      // Encode all URLs as a newline-separated data: URI (same as Paste tab)
+      final raw = dicts.map((d) => d.url).join('\n');
+      final url = 'data:text/plain;charset=utf-8,${Uri.encodeComponent(raw)}';
+      await notifier.addSource(url, folderPath);
+    }
+
     if (mounted) {
+      final groupCount = groups.length;
+      final dictCount = selected.length;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Added ${selected.length} dictionary source(s)')),
+        SnackBar(
+          content: Text(
+            'Added $dictCount dictionar${dictCount == 1 ? 'y' : 'ies'} '
+            'in $groupCount source group${groupCount == 1 ? '' : 's'}',
+          ),
+        ),
       );
       Navigator.pop(context);
     }
@@ -517,6 +537,7 @@ class _SourceGroup extends StatelessWidget {
       childrenPadding: const EdgeInsets.only(left: 12),
       children: _entries.map((entry) => CheckboxListTile(
         dense: true,
+        controlAffinity: ListTileControlAffinity.leading,
         value: entry.isSelected,
         title: Text(entry.name, style: const TextStyle(fontSize: 13)),
         subtitle: entry.date.isNotEmpty
