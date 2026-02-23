@@ -6,42 +6,32 @@ import '../providers/providers.dart';
 
 // ─── Data model ────────────────────────────────────────────────────────────────
 
-/// A node in the dictionaryIndices.md hierarchy.
-/// Level: 2 = ##, 3 = ###, 4 = ####
-class _IndexNode {
-  _IndexNode({
-    required this.level,
-    required this.title,
-    this.tarsUrl,
-    this.parent,
+/// A tars.MD source — a leaf node in the dictionaryIndices.md hierarchy.
+class _TarsSource {
+  _TarsSource({
+    required this.tarsUrl,
+    required this.displayPath, // e.g. "sa-head/sa-entries"
+    required this.breadcrumb,  // e.g. ["sa - संस्कृतम्", "Basic"]
+    required this.folderPath,  // sanitized nested folder for storage
   });
 
-  final int level; // 2, 3, or 4
-  final String title;
-  final String? tarsUrl; // non-null for leaf nodes (tars.MD links)
-  final _IndexNode? parent;
-  final List<_IndexNode> children = [];
+  final String tarsUrl;
+  final String displayPath;
+  final List<String> breadcrumb;
+  final String folderPath;
 
-  bool isSelected = false;
+  // Fetched dictionaries (null = not yet fetched, empty = fetch failed/empty)
+  List<_DictEntry>? entries;
+  bool isFetching = false;
+  bool fetchFailed = false;
 
-  /// Returns the sanitized nested folder path for this node, e.g.
-  /// "sa_संस्कृतम्/Basic/En"
-  String folderPath() {
-    final segments = <String>[];
-    _IndexNode? cur = parent;
-    while (cur != null) {
-      segments.insert(0, _sanitize(cur.title));
-      cur = cur.parent;
-    }
-    if (tarsUrl == null) segments.add(_sanitize(title));
-    return p.joinAll(segments.isEmpty ? [_sanitize(title)] : segments);
-  }
-
-  static String _sanitize(String s) =>
-      s.trim().replaceAll(RegExp(r'[\s<>:"/\\|?*]+'), '_');
+  // Whether this group is selected (tri-state via entries)
+  bool get allSelected =>
+      entries != null && entries!.isNotEmpty && entries!.every((e) => e.isSelected);
+  bool get anySelected => entries != null && entries!.any((e) => e.isSelected);
 }
 
-/// Metadata extracted from a single dictionary archive filename.
+/// A single dictionary archive inside a tars.MD.
 class _DictEntry {
   _DictEntry({
     required this.url,
@@ -55,81 +45,93 @@ class _DictEntry {
   final String name;
   final String date;
   final String sizeMb;
-  final String folderPath; // source label / nested folder
+  final String folderPath;
 
   bool isSelected = false;
 }
 
-// ─── Parsing helpers ────────────────────────────────────────────────────────────
+// ─── Helpers ───────────────────────────────────────────────────────────────────
 
-/// Parses the raw Markdown text into a list of root-level (_IndexNode level 2)
-/// nodes, each containing ###/#### children and tars.MD leaf links.
-List<_IndexNode> _parseIndices(String markdown) {
+/// Extracts the interesting path from a tars.MD URL, e.g.:
+///   https://raw.githubusercontent.com/.../gh-pages/sa-head/sa-entries/tars/tars.MD
+///   → "sa-head/sa-entries"
+String _displayPath(String url) {
+  final ghIdx = url.indexOf('/gh-pages/');
+  if (ghIdx == -1) {
+    // fallback: last two segments before tars/tars.MD
+    final segs = Uri.parse(url).pathSegments;
+    final tarsIdx = segs.lastIndexOf('tars');
+    if (tarsIdx >= 2) {
+      return segs.sublist(tarsIdx - 2, tarsIdx).join('/');
+    }
+    return segs.take(segs.length - 2).lastOrNull ?? url;
+  }
+  final afterGhPages = url.substring(ghIdx + '/gh-pages/'.length);
+  // remove trailing /tars/tars.MD or /tars/tars_external.MD
+  final cleaned = afterGhPages.replaceAll(RegExp(r'/tars/tars.*\.MD$', caseSensitive: false), '');
+  return cleaned.isEmpty ? 'tars' : cleaned;
+}
+
+String _sanitize(String s) =>
+    s.trim().replaceAll(RegExp(r'[\s<>:"/\\|?*]+'), '_');
+
+/// Parses dictionaryIndices.md into a flat list of _TarsSource objects.
+List<_TarsSource> _parseIndices(String markdown) {
   final lines = markdown.split('\n');
-  _IndexNode? h2, h3, h4;
-  final roots = <_IndexNode>[];
+  String h2 = '', h3 = '', h4 = '';
+  final sources = <_TarsSource>[];
 
-  // Matches <https://...tars.MD> or <https://...tars_external.MD>
-  // but NOT lines starting with "Disabled:"
   final urlRe = RegExp(r'<(https?://\S+\.MD)>', caseSensitive: false);
 
   for (final raw in lines) {
     final line = raw.trim();
     if (line.startsWith('#### ')) {
-      final title = line.substring(5).trim();
-      h4 = _IndexNode(level: 4, title: title, parent: h3 ?? h2);
-      (h3 ?? h2)?.children.add(h4);
+      h4 = line.substring(5).trim();
     } else if (line.startsWith('### ')) {
-      final title = line.substring(4).trim();
-      h3 = _IndexNode(level: 3, title: title, parent: h2);
-      h4 = null;
-      h2?.children.add(h3);
+      h3 = line.substring(4).trim();
+      h4 = '';
     } else if (line.startsWith('## ')) {
-      final title = line.substring(3).trim();
-      h2 = _IndexNode(level: 2, title: title);
-      h3 = h4 = null;
-      roots.add(h2);
+      h2 = line.substring(3).trim();
+      h3 = h4 = '';
     } else if (!line.startsWith('Disabled:')) {
       final m = urlRe.firstMatch(line);
-      if (m != null) {
+      if (m != null && h2.isNotEmpty) {
         final url = m.group(1)!;
-        final parent = h4 ?? h3 ?? h2;
-        if (parent != null) {
-          final leaf = _IndexNode(
-            level: parent.level + 1,
-            title: url.split('/').reversed.take(2).toList().reversed.join('/'),
-            tarsUrl: url,
-            parent: parent,
-          );
-          parent.children.add(leaf);
-        }
+        final crumbs = [h2, if (h3.isNotEmpty) h3, if (h4.isNotEmpty) h4];
+        // Build storage folder: Indic-dict/h2/h3/h4 (sanitized)
+        final folderSegs = ['Indic-dict', ...crumbs.map(_sanitize)];
+        sources.add(_TarsSource(
+          tarsUrl: url,
+          displayPath: _displayPath(url),
+          breadcrumb: crumbs,
+          folderPath: p.joinAll(folderSegs),
+        ));
       }
     }
   }
-  return roots;
+  return sources;
 }
 
-/// Parses a tars.MD file content into individual dictionary file URLs, grouped
-/// ready to display. Returns raw archive URLs found.
+/// Parses a tars.MD content into archive URLs.
 List<String> _parseTarsMd(String content) {
-  final archiveExt =
+  const archiveExt =
       r'\.(?:tar\.gz|tgz|tar\.bz2|tbz2|tar\.xz|txz|tar\.lzma|tlz|tar\.zst|tzst|zip|7z|rar|bz2|xz|lzma|zst|dz)';
   final re = RegExp(r'https?://\S+?' + archiveExt, caseSensitive: false);
   return re.allMatches(content).map((m) => m.group(0)!).toList();
 }
 
-/// Extracts display metadata from a URL like:
-///   .../dictname_20240101_120000_12MB.tar.gz
+/// Extracts display metadata from a structured filename.
 _DictEntry _parseEntry(String url, String folderPath) {
   final filename = url.split('/').last;
-  // pattern: name_YYYYMMDD_HHMMSS_NNMb.ext  (size may be decimal like 1.5MB)
   final re = RegExp(
-      r'^(.+?)_(\d{8})_(\d{6})_([\d.]+)MB\.(.+)$',
-      caseSensitive: false);
+    r'^(.+?)_(\d{8})_(\d{6})_([\d.]+)MB\.(.+)$',
+    caseSensitive: false,
+  );
   final m = re.firstMatch(filename);
   if (m != null) {
-    final rawDate = m.group(2)!; // 20240101
-    final date = '${rawDate.substring(0, 4)}-${rawDate.substring(4, 6)}-${rawDate.substring(6, 8)}';
+    final rawDate = m.group(2)!;
+    final date =
+        '${rawDate.substring(0, 4)}-${rawDate.substring(4, 6)}-${rawDate.substring(6, 8)}';
     return _DictEntry(
       url: url,
       name: m.group(1)!.replaceAll('_', ' '),
@@ -138,22 +140,13 @@ _DictEntry _parseEntry(String url, String folderPath) {
       folderPath: folderPath,
     );
   }
-  // Fallback
-  return _DictEntry(
-    url: url,
-    name: filename,
-    date: '',
-    sizeMb: '',
-    folderPath: folderPath,
-  );
+  return _DictEntry(url: url, name: filename, date: '', sizeMb: '', folderPath: folderPath);
 }
 
 // ─── Screen ────────────────────────────────────────────────────────────────────
 
 class IndicDictBrowserScreen extends StatefulWidget {
   const IndicDictBrowserScreen({super.key, required this.ref});
-
-  /// Riverpod ref passed from the parent so we can call addSource.
   final WidgetRef ref;
 
   @override
@@ -164,19 +157,17 @@ class _IndicDictBrowserScreenState extends State<IndicDictBrowserScreen> {
   static const _indicesUrl =
       'https://github.com/indic-dict/stardict-index/releases/download/current/dictionaryIndices.md';
 
-  // Step 1 state
-  List<_IndexNode> _roots = [];
   bool _loadingIndex = true;
   String? _indexError;
+  List<_TarsSource> _sources = [];
 
-  // Step 2 state
-  bool _step2 = false;
-  bool _fetchingDicts = false;
-  String? _fetchError;
-  // Map from tarsUrl → list of DictEntry
-  final Map<String, List<_DictEntry>> _dictsBySource = {};
-  // For display: keep track of which source label a tarsUrl belongs to
-  final Map<String, String> _sourceLabel = {};
+  // Counts for the bottom bar
+  int get _fetchedCount => _sources.where((s) => s.entries != null).length;
+  int get _totalCount => _sources.length;
+  bool get _allFetched => _fetchedCount == _totalCount;
+
+  List<_DictEntry> get _selectedDicts =>
+      _sources.expand<_DictEntry>((s) => s.entries ?? []).where((e) => e.isSelected).toList();
 
   @override
   void initState() {
@@ -188,60 +179,60 @@ class _IndicDictBrowserScreenState extends State<IndicDictBrowserScreen> {
     try {
       final dio = Dio();
       final resp = await dio.get<String>(_indicesUrl);
-      final roots = _parseIndices(resp.data ?? '');
-      if (mounted) setState(() { _roots = roots; _loadingIndex = false; });
+      final sources = _parseIndices(resp.data ?? '');
+      if (mounted) {
+        setState(() {
+          _sources = sources;
+          _loadingIndex = false;
+        });
+      }
+      // Auto-fetch all tars.MD files in parallel
+      await _fetchAll(sources);
     } catch (e) {
-      if (mounted) setState(() { _indexError = e.toString(); _loadingIndex = false; });
-    }
-  }
-
-  // Collect selected leaf nodes (tars.MD links)
-  List<_IndexNode> _selectedLeaves() {
-    final out = <_IndexNode>[];
-    void walk(_IndexNode n) {
-      if (n.tarsUrl != null && n.isSelected) { out.add(n); }
-      for (final c in n.children) { walk(c); }
-    }
-    for (final r in _roots) { walk(r); }
-    return out;
-  }
-
-  Future<void> _fetchSelected() async {
-    final leaves = _selectedLeaves();
-    if (leaves.isEmpty) return;
-    setState(() { _fetchingDicts = true; _fetchError = null; _step2 = true; _dictsBySource.clear(); _sourceLabel.clear(); });
-
-    final dio = Dio();
-    for (final leaf in leaves) {
-      final url = leaf.tarsUrl!;
-      final folder = leaf.parent != null ? leaf.parent!.folderPath() : _IndexNode._sanitize(leaf.title);
-      try {
-        final resp = await dio.get<String>(url);
-        final archiveUrls = _parseTarsMd(resp.data ?? '');
-        final entries = archiveUrls.map((u) => _parseEntry(u, folder)).toList();
-        _dictsBySource[url] = entries;
-        _sourceLabel[url] = leaf.title;
-      } catch (_) {
-        _dictsBySource[url] = [];
-        _sourceLabel[url] = leaf.title;
+      if (mounted) {
+        setState(() {
+          _indexError = e.toString();
+          _loadingIndex = false;
+        });
       }
     }
-    if (mounted) setState(() { _fetchingDicts = false; });
   }
 
-  List<_DictEntry> get _selectedDicts {
-    return _dictsBySource.values.expand((l) => l).where((e) => e.isSelected).toList();
+  Future<void> _fetchAll(List<_TarsSource> sources) async {
+    final dio = Dio();
+    await Future.wait(sources.map((src) => _fetchOne(dio, src)));
   }
 
-  Future<void> _addToDownloadQueue() async {
+  Future<void> _fetchOne(Dio dio, _TarsSource src) async {
+    if (mounted) setState(() => src.isFetching = true);
+    try {
+      final resp = await dio.get<String>(src.tarsUrl);
+      final archiveUrls = _parseTarsMd(resp.data ?? '');
+      final entries = archiveUrls.map((u) => _parseEntry(u, src.folderPath)).toList();
+      if (mounted) {
+        setState(() {
+          src.entries = entries;
+          src.isFetching = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          src.entries = [];
+          src.isFetching = false;
+          src.fetchFailed = true;
+        });
+      }
+    }
+  }
+
+  Future<void> _addToQueue() async {
     final selected = _selectedDicts;
     if (selected.isEmpty) return;
-
     final notifier = widget.ref.read(sourcesProvider.notifier);
-    for (final entry in selected) {
-      await notifier.addSource(entry.url, entry.folderPath);
+    for (final e in selected) {
+      await notifier.addSource(e.url, e.folderPath);
     }
-
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Added ${selected.length} dictionary source(s)')),
@@ -250,165 +241,119 @@ class _IndicDictBrowserScreenState extends State<IndicDictBrowserScreen> {
     }
   }
 
-  // ─── Tree-selection helpers ─────────────────────────────────────────────────
-
-  void _setNodeSelected(_IndexNode node, bool val) {
-    node.isSelected = val;
-    for (final c in node.children) { _setNodeSelected(c, val); }
-  }
-
   // ─── Build ──────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(_step2 ? 'Select Dictionaries' : 'Browse Indic-dicts'),
-        leading: _step2
-            ? IconButton(
-                icon: const Icon(Icons.arrow_back),
-                onPressed: () => setState(() { _step2 = false; }),
-              )
-            : null,
+        title: const Text('Browse Indic-dicts'),
+        actions: [
+          if (!_loadingIndex && !_allFetched)
+            Padding(
+              padding: const EdgeInsets.only(right: 12),
+              child: Center(
+                child: Text(
+                  'Loading $_fetchedCount/$_totalCount…',
+                  style: const TextStyle(fontSize: 12),
+                ),
+              ),
+            ),
+        ],
       ),
-      body: _step2 ? _buildStep2() : _buildStep1(),
+      body: _buildBody(),
       bottomNavigationBar: _buildBottomBar(),
     );
   }
 
-  Widget _buildStep1() {
+  Widget _buildBody() {
     if (_loadingIndex) {
-      return const Center(child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
+      return const Center(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
           CircularProgressIndicator(),
           SizedBox(height: 16),
           Text('Loading Indic-dict index…'),
-        ],
-      ));
+        ]),
+      );
     }
     if (_indexError != null) {
-      return Center(child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          const Icon(Icons.error_outline, size: 48, color: Colors.red),
-          const SizedBox(height: 12),
-          Text(_indexError!, textAlign: TextAlign.center),
-          const SizedBox(height: 16),
-          ElevatedButton(onPressed: () { setState(() { _loadingIndex = true; _indexError = null; }); _loadIndex(); }, child: const Text('Retry')),
-        ]),
-      ));
-    }
-    return Column(children: [
-      Container(
-        color: Colors.indigo.withValues(alpha: 0.08),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        child: const Row(children: [
-          Icon(Icons.info_outline, size: 16, color: Colors.indigo),
-          SizedBox(width: 8),
-          Expanded(child: Text(
-            'Select one or more tars.MD sources, then tap "Fetch Selected" to browse individual dictionaries.',
-            style: TextStyle(fontSize: 12, color: Colors.indigo),
-          )),
-        ]),
-      ),
-      Expanded(child: ListView(
-        children: _roots.map((r) => _H2Tile(node: r, onChanged: (v) {
-          setState(() { _setNodeSelected(r, v ?? false); });
-        })).toList(),
-      )),
-    ]);
-  }
-
-  Widget _buildStep2() {
-    if (_fetchingDicts) {
-      return const Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-        CircularProgressIndicator(),
-        SizedBox(height: 16),
-        Text('Fetching dictionary lists…'),
-      ]));
-    }
-    if (_fetchError != null) {
-      return Center(child: Text(_fetchError!));
-    }
-    if (_dictsBySource.isEmpty) {
-      return const Center(child: Text('No dictionaries found.'));
-    }
-
-    final items = <Widget>[];
-    _dictsBySource.forEach((srcUrl, dicts) {
-      items.add(Padding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
-        child: Row(children: [
-          const Icon(Icons.source, size: 16, color: Colors.grey),
-          const SizedBox(width: 6),
-          Expanded(child: Text(
-            _sourceLabel[srcUrl] ?? srcUrl,
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-          )),
-        ]),
-      ));
-      if (dicts.isEmpty) {
-        items.add(const Padding(
-          padding: EdgeInsets.only(left: 32, bottom: 8),
-          child: Text('No dictionaries found in this source.', style: TextStyle(color: Colors.grey, fontSize: 12)),
-        ));
-      }
-      for (final entry in dicts) {
-        items.add(CheckboxListTile(
-          value: entry.isSelected,
-          dense: true,
-          title: Text(entry.name, style: const TextStyle(fontSize: 14)),
-          subtitle: entry.date.isNotEmpty
-              ? Text('${entry.date}  •  ${entry.sizeMb}', style: const TextStyle(fontSize: 12))
-              : null,
-          secondary: entry.sizeMb.isNotEmpty
-              ? Chip(
-                  label: Text(entry.sizeMb, style: const TextStyle(fontSize: 11)),
-                  visualDensity: VisualDensity.compact,
-                  padding: EdgeInsets.zero,
-                )
-              : null,
-          onChanged: (v) => setState(() { entry.isSelected = v ?? false; }),
-        ));
-      }
-    });
-
-    return ListView(children: items);
-  }
-
-  Widget _buildBottomBar() {
-    if (_step2) {
-      final count = _selectedDicts.length;
-      return SafeArea(
+      return Center(
         child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: ElevatedButton.icon(
-            onPressed: count > 0 ? _addToDownloadQueue : null,
-            icon: const Icon(Icons.add_task),
-            label: Text(count > 0 ? 'Add $count to Download Queue' : 'Select dictionaries above'),
-            style: ElevatedButton.styleFrom(
-              minimumSize: const Size.fromHeight(48),
-              backgroundColor: Colors.indigo,
-              foregroundColor: Colors.white,
+          padding: const EdgeInsets.all(24),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            const Icon(Icons.error_outline, size: 48, color: Colors.red),
+            const SizedBox(height: 12),
+            Text(_indexError!, textAlign: TextAlign.center),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: () {
+                setState(() {
+                  _loadingIndex = true;
+                  _indexError = null;
+                });
+                _loadIndex();
+              },
+              child: const Text('Retry'),
             ),
-          ),
+          ]),
         ),
       );
     }
 
-    final leafCount = _selectedLeaves().length;
+    // Group sources by h2 → h3
+    final byH2 = <String, Map<String, List<_TarsSource>>>{};
+    for (final src in _sources) {
+      final h2 = src.breadcrumb[0];
+      final h3 = src.breadcrumb.length > 1 ? src.breadcrumb[1] : '';
+      byH2.putIfAbsent(h2, () => {})[h3] = (byH2[h2]?[h3] ?? [])..add(src);
+    }
+
+    return Column(children: [
+      // Info bar with loading progress
+      if (!_allFetched)
+        LinearProgressIndicator(value: _totalCount == 0 ? null : _fetchedCount / _totalCount),
+      Container(
+        color: Colors.indigo.withValues(alpha: 0.08),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: Row(children: [
+          const Icon(Icons.info_outline, size: 15, color: Colors.indigo),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              _allFetched
+                  ? 'Select dictionary groups or individual dictionaries, then tap "Add to Queue".'
+                  : 'Fetching dictionary lists… ($_fetchedCount / $_totalCount)',
+              style: const TextStyle(fontSize: 12, color: Colors.indigo),
+            ),
+          ),
+        ]),
+      ),
+      Expanded(
+        child: ListView(
+          children: byH2.entries.map((h2Entry) {
+            return _H2Group(
+              h2: h2Entry.key,
+              byH3: h2Entry.value,
+              onChanged: () => setState(() {}),
+            );
+          }).toList(),
+        ),
+      ),
+    ]);
+  }
+
+  Widget _buildBottomBar() {
+    if (_loadingIndex) return const SizedBox.shrink();
+    final count = _selectedDicts.length;
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: ElevatedButton.icon(
-          onPressed: leafCount > 0
-              ? () async { await _fetchSelected(); }
-              : null,
-          icon: _fetchingDicts
-              ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-              : const Icon(Icons.search),
-          label: Text(leafCount > 0 ? 'Fetch Selected ($leafCount source${leafCount == 1 ? '' : 's'})' : 'Select sources above'),
+          onPressed: count > 0 ? _addToQueue : null,
+          icon: const Icon(Icons.add_task),
+          label: Text(count > 0
+              ? 'Add $count dictionar${count == 1 ? 'y' : 'ies'} to Queue'
+              : 'Select dictionaries above'),
           style: ElevatedButton.styleFrom(
             minimumSize: const Size.fromHeight(48),
             backgroundColor: Colors.indigo,
@@ -420,131 +365,169 @@ class _IndicDictBrowserScreenState extends State<IndicDictBrowserScreen> {
   }
 }
 
-// ─── Hierarchy tiles ────────────────────────────────────────────────────────────
+// ─── Group widgets ─────────────────────────────────────────────────────────────
 
-class _H2Tile extends StatefulWidget {
-  const _H2Tile({required this.node, required this.onChanged});
-  final _IndexNode node;
-  final ValueChanged<bool?> onChanged;
-  @override
-  State<_H2Tile> createState() => _H2TileState();
-}
+class _H2Group extends StatelessWidget {
+  const _H2Group({required this.h2, required this.byH3, required this.onChanged});
+  final String h2;
+  final Map<String, List<_TarsSource>> byH3;
+  final VoidCallback onChanged;
 
-class _H2TileState extends State<_H2Tile> {
+  List<_TarsSource> get _allSources => byH3.values.expand((v) => v).toList();
+  List<_DictEntry> get _allEntries =>
+      _allSources.expand<_DictEntry>((s) => s.entries ?? []).toList();
+
+  bool get _allSelected =>
+      _allEntries.isNotEmpty && _allEntries.every((e) => e.isSelected);
+  bool get _anySelected => _allEntries.any((e) => e.isSelected);
+
+  void _toggleAll(bool val) {
+    for (final e in _allEntries) { e.isSelected = val; }
+    onChanged();
+  }
+
   @override
   Widget build(BuildContext context) {
-    final node = widget.node;
-    final leaves = <_IndexNode>[];
-    void collect(_IndexNode n) {
-      if (n.tarsUrl != null) {
-        leaves.add(n);
-      } else {
-        for (final c in n.children) { collect(c); }
-      }
-    }
-    collect(node);
-    final allOn = leaves.isNotEmpty && leaves.every((l) => l.isSelected);
-    final anyOn = leaves.any((l) => l.isSelected);
+    final triState = _allSelected ? true : (_anySelected ? null : false);
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      elevation: 1,
+      child: ExpansionTile(
+        leading: Checkbox(
+          tristate: true,
+          value: triState,
+          onChanged: (v) => _toggleAll(v ?? false),
+        ),
+        title: Text(h2,
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+        childrenPadding: const EdgeInsets.only(left: 12),
+        children: byH3.entries.map((h3Entry) {
+          final h3 = h3Entry.key;
+          final sources = h3Entry.value;
+          if (h3.isEmpty) {
+            // Direct sources under h2 (no h3 heading)
+            return Column(
+              children: sources.map((src) => _SourceGroup(
+                src: src,
+                onChanged: onChanged,
+                showHeader: false,
+              )).toList(),
+            );
+          }
+          return _H3Group(h3: h3, sources: sources, onChanged: onChanged);
+        }).toList(),
+      ),
+    );
+  }
+}
 
+class _H3Group extends StatelessWidget {
+  const _H3Group({required this.h3, required this.sources, required this.onChanged});
+  final String h3;
+  final List<_TarsSource> sources;
+  final VoidCallback onChanged;
+
+  List<_DictEntry> get _allEntries =>
+      sources.expand<_DictEntry>((s) => s.entries ?? []).toList();
+
+  bool get _allSelected =>
+      _allEntries.isNotEmpty && _allEntries.every((e) => e.isSelected);
+  bool get _anySelected => _allEntries.any((e) => e.isSelected);
+
+  void _toggleAll(bool val) {
+    for (final e in _allEntries) { e.isSelected = val; }
+    onChanged();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final triState = _allSelected ? true : (_anySelected ? null : false);
     return ExpansionTile(
       leading: Checkbox(
         tristate: true,
-        value: allOn ? true : (anyOn ? null : false),
-        onChanged: (v) {
-          setState(() {
-            _setAll(node, v ?? false);
-          });
-          widget.onChanged(v);
-        },
+        value: triState,
+        onChanged: (v) => _toggleAll(v ?? false),
       ),
-      title: Text(node.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-      childrenPadding: const EdgeInsets.only(left: 16),
-      children: node.children.map((child) {
-        if (child.tarsUrl != null) {
-          return _LeafTile(node: child, onChanged: (_) => setState(() {}));
-        }
-        return _H3Tile(node: child, onChanged: (_) => setState(() {}));
-      }).toList(),
+      title: Text(h3,
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+      childrenPadding: const EdgeInsets.only(left: 12),
+      children: sources.map((src) => _SourceGroup(src: src, onChanged: onChanged)).toList(),
     );
   }
+}
 
-  void _setAll(_IndexNode n, bool v) {
-    n.isSelected = v;
-    for (final c in n.children) { _setAll(c, v); }
+/// Represents a single tars.MD source with its dictionaries listed inside.
+class _SourceGroup extends StatelessWidget {
+  const _SourceGroup({required this.src, required this.onChanged, this.showHeader = true});
+  final _TarsSource src;
+  final VoidCallback onChanged;
+  final bool showHeader;
+
+  List<_DictEntry> get _entries => src.entries ?? [];
+  bool get _allSelected => _entries.isNotEmpty && _entries.every((e) => e.isSelected);
+  bool get _anySelected => _entries.any((e) => e.isSelected);
+
+  void _toggleAll(bool val) {
+    for (final e in _entries) { e.isSelected = val; }
+    onChanged();
   }
-}
 
-class _H3Tile extends StatefulWidget {
-  const _H3Tile({required this.node, required this.onChanged});
-  final _IndexNode node;
-  final ValueChanged<bool?> onChanged;
-  @override
-  State<_H3Tile> createState() => _H3TileState();
-}
-
-class _H3TileState extends State<_H3Tile> {
   @override
   Widget build(BuildContext context) {
-    final node = widget.node;
-    final leaves = <_IndexNode>[];
-    void collect(_IndexNode n) {
-      if (n.tarsUrl != null) {
-        leaves.add(n);
-      } else {
-        for (final c in n.children) { collect(c); }
-      }
+    if (src.isFetching) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: Row(children: [
+          const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+          const SizedBox(width: 12),
+          Text(src.displayPath, style: const TextStyle(fontSize: 13, color: Colors.grey)),
+        ]),
+      );
     }
-    collect(node);
-    final allOn = leaves.isNotEmpty && leaves.every((l) => l.isSelected);
-    final anyOn = leaves.any((l) => l.isSelected);
+    if (src.fetchFailed || _entries.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        child: Row(children: [
+          Icon(src.fetchFailed ? Icons.error_outline : Icons.inbox_outlined,
+              size: 16, color: Colors.grey),
+          const SizedBox(width: 8),
+          Text(
+            '${src.displayPath} — ${src.fetchFailed ? 'fetch failed' : 'no dictionaries'}',
+            style: const TextStyle(fontSize: 12, color: Colors.grey),
+          ),
+        ]),
+      );
+    }
 
+    final triState = _allSelected ? true : (_anySelected ? null : false);
     return ExpansionTile(
       leading: Checkbox(
         tristate: true,
-        value: allOn ? true : (anyOn ? null : false),
-        onChanged: (v) {
-          setState(() { _setAll(node, v ?? false); });
-          widget.onChanged(v);
-        },
+        value: triState,
+        onChanged: (v) => _toggleAll(v ?? false),
       ),
-      title: Text(node.title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-      childrenPadding: const EdgeInsets.only(left: 16),
-      children: node.children.map((child) {
-        if (child.tarsUrl != null) {
-          return _LeafTile(node: child, onChanged: (_) => setState(() {}));
-        }
-        return _H3Tile(node: child, onChanged: (_) => setState(() {}));
-      }).toList(),
-    );
-  }
-
-  void _setAll(_IndexNode n, bool v) {
-    n.isSelected = v;
-    for (final c in n.children) { _setAll(c, v); }
-  }
-}
-
-class _LeafTile extends StatefulWidget {
-  const _LeafTile({required this.node, required this.onChanged});
-  final _IndexNode node;
-  final ValueChanged<bool?> onChanged;
-  @override
-  State<_LeafTile> createState() => _LeafTileState();
-}
-
-class _LeafTileState extends State<_LeafTile> {
-  @override
-  Widget build(BuildContext context) {
-    final node = widget.node;
-    return CheckboxListTile(
-      dense: true,
-      value: node.isSelected,
-      title: Text(node.title, style: const TextStyle(fontSize: 13)),
-      secondary: const Icon(Icons.description_outlined, size: 18, color: Colors.grey),
-      onChanged: (v) {
-        setState(() { node.isSelected = v ?? false; });
-        widget.onChanged(v);
-      },
+      title: Text(
+        src.displayPath,
+        style: const TextStyle(fontSize: 13, fontFamily: 'monospace'),
+      ),
+      subtitle: Text(
+        '${_entries.length} dictionar${_entries.length == 1 ? 'y' : 'ies'}',
+        style: const TextStyle(fontSize: 11),
+      ),
+      childrenPadding: const EdgeInsets.only(left: 12),
+      children: _entries.map((entry) => CheckboxListTile(
+        dense: true,
+        value: entry.isSelected,
+        title: Text(entry.name, style: const TextStyle(fontSize: 13)),
+        subtitle: entry.date.isNotEmpty
+            ? Text('${entry.date}  •  ${entry.sizeMb}',
+                style: const TextStyle(fontSize: 11))
+            : null,
+        onChanged: (v) {
+          entry.isSelected = v ?? false;
+          onChanged();
+        },
+      )).toList(),
     );
   }
 }
