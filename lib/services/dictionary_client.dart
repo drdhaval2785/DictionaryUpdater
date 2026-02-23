@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
 import 'package:isar/isar.dart';
 import 'package:path/path.dart' as p;
@@ -155,7 +156,12 @@ class DictionaryClient {
 
     // Try to detect remote update via HEAD request and persist lastChecked
     final now = DateTime.now();
-    final remote = await checkRemoteVersion(url);
+    DateTime? remote;
+    try {
+      remote = await checkRemoteVersion(url);
+    } catch (e) {
+      debugPrint('Error checking remote version for $url: $e');
+    }
     await isar.writeTxn(() async {
       final freshMeta = await query.findFirst();
       if (freshMeta != null) {
@@ -188,6 +194,7 @@ class DictionaryClient {
     Isar isar, {
     String? sourceName,
     void Function(double)? onProgress,
+    CancelToken? cancelToken,
   }) async {
     final dir = await _storageService.getStorageDirectory(sourceName: sourceName);
     final fileName = _storageService.sanitizeFileName(p.basename(url));
@@ -197,6 +204,7 @@ class DictionaryClient {
       await _dio.download(
         url,
         savePath,
+        cancelToken: cancelToken,
         onReceiveProgress: (received, total) {
           if (total != -1 && onProgress != null) {
             onProgress(received / total);
@@ -231,6 +239,15 @@ class DictionaryClient {
 
       return file;
     } on DioException catch (e) {
+      // Clean up partial file on failure or cancellation
+      final partialFile = File(savePath);
+      if (await partialFile.exists()) {
+        await partialFile.delete();
+      }
+
+      if (e.type == DioExceptionType.cancel) {
+        throw e; // Rethrow to allow caller to handle cancellation
+      }
       if (e.type == DioExceptionType.connectionError ||
           e.error is SocketException) {
         throw Exception(
@@ -238,6 +255,11 @@ class DictionaryClient {
       }
       throw Exception('Download failed: ${e.message}');
     } catch (e) {
+      // Clean up partial file on other errors too
+      final partialFile = File(savePath);
+      if (await partialFile.exists()) {
+        await partialFile.delete();
+      }
       throw Exception('Download failed: $e');
     }
   }

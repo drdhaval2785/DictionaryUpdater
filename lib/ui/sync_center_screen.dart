@@ -6,24 +6,33 @@ import '../models/dictionary_models.dart';
 import 'source_expansion_panel.dart';
 import 'add_dictionary_dialog.dart';
 
-class SyncCenterScreen extends ConsumerWidget {
+class SyncCenterScreen extends ConsumerStatefulWidget {
   const SyncCenterScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<SyncCenterScreen> createState() => _SyncCenterScreenState();
+}
+
+class _SyncCenterScreenState extends ConsumerState<SyncCenterScreen> {
+  @override
+  Widget build(BuildContext context) {
     final sourcesAsync = ref.watch(sourcesProvider);
 
     // Collect total selected across all sources for the global FAB
     final allSources = sourcesAsync.valueOrNull ?? [];
     int totalSelected = 0;
     double totalSizeMb = 0;
+    bool isAnyDownloading = false;
     for (final source in allSources) {
-      final items =
-          ref.watch(sourceItemsProvider(source)).valueOrNull ?? [];
+      final items = ref.watch(sourceItemsProvider(source)).valueOrNull ?? [];
       final selectedItems = items.where((i) => i.isSelected).toList();
       totalSelected += selectedItems.length;
       for (final item in selectedItems) {
         totalSizeMb += item.sizeMb ?? 0;
+      }
+      final downloadState = ref.watch(downloadStateProvider(source));
+      if (downloadState.active) {
+        isAnyDownloading = true;
       }
     }
 
@@ -31,7 +40,7 @@ class SyncCenterScreen extends ConsumerWidget {
       children: [
         sourcesAsync.when(
           data: (sources) => sources.isEmpty
-              ? _buildEmptyState(context, ref)
+              ? _buildEmptyState(context)
               : Column(
                   children: [
                     if (totalSelected > 0)
@@ -64,17 +73,36 @@ class SyncCenterScreen extends ConsumerWidget {
           loading: () => _buildShimmer(),
           error: (err, _) => _buildError(err.toString()),
         ),
-        if (totalSelected > 0)
+        if (totalSelected > 0 || isAnyDownloading)
           Positioned(
             right: 16,
             bottom: 16,
-            child: FloatingActionButton.extended(
-              heroTag: 'global_download',
-              icon: const Icon(Icons.download_rounded),
-              label: Text(totalSizeMb > 0
-                  ? 'Download $totalSelected (${totalSizeMb.toStringAsFixed(1)} MB)'
-                  : 'Download $totalSelected'),
-              onPressed: () => _downloadAll(context, ref, allSources, totalSizeMb),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (isAnyDownloading)
+                  FloatingActionButton.extended(
+                    heroTag: 'global_stop',
+                    onPressed: () {
+                      for (final source in allSources) {
+                        ref.read(sourceItemsProvider(source).notifier).cancelDownloads();
+                      }
+                    },
+                    backgroundColor: Theme.of(context).colorScheme.errorContainer,
+                    foregroundColor: Theme.of(context).colorScheme.onErrorContainer,
+                    icon: const Icon(Icons.stop_rounded),
+                    label: const Text('Stop All'),
+                  ),
+                if (totalSelected > 0 && !isAnyDownloading)
+                  FloatingActionButton.extended(
+                    heroTag: 'global_download',
+                    icon: const Icon(Icons.download_rounded),
+                    label: Text(totalSizeMb > 0
+                        ? 'Download $totalSelected (${totalSizeMb.toStringAsFixed(1)} MB)'
+                        : 'Download $totalSelected'),
+                    onPressed: () => _downloadAll(context, allSources, totalSizeMb),
+                  ),
+              ],
             ),
           ),
       ],
@@ -83,7 +111,7 @@ class SyncCenterScreen extends ConsumerWidget {
 
   // ─── Global download ────────────────────────────────────────────────────────
 
-  Future<void> _downloadAll(BuildContext context, WidgetRef ref,
+  Future<void> _downloadAll(BuildContext context,
       List<DictionarySource> sources, double totalSizeMb) async {
     if (totalSizeMb > 50) {
       final confirmed = await showDialog<bool>(
@@ -108,20 +136,23 @@ class SyncCenterScreen extends ConsumerWidget {
     }
 
     for (final DictionarySource source in sources) {
-      final notifier = ref.read(sourceItemsProvider(source).notifier);
-      final hasSelected =
-          (ref.read(sourceItemsProvider(source)).valueOrNull ?? [])
-              .any((i) => i.isSelected);
+      if (!mounted) return;
+
+      final items = ref.read(sourceItemsProvider(source)).valueOrNull ?? [];
+      final hasSelected = items.any((i) => i.isSelected);
+
       if (hasSelected) {
-        if (!context.mounted) break;
+        if (!mounted) return;
+        final notifier = ref.read(sourceItemsProvider(source).notifier);
         await notifier.downloadSelected(context);
+        if (!mounted) return;
       }
     }
   }
 
   // ─── Empty state ─────────────────────────────────────────────────────────────
 
-  Widget _buildEmptyState(BuildContext context, WidgetRef ref) {
+  Widget _buildEmptyState(BuildContext context) {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,

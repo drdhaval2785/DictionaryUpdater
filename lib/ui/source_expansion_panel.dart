@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
@@ -100,6 +101,8 @@ final downloadStateProvider = StateProvider.autoDispose
 
 class SourceItemsNotifier extends AutoDisposeFamilyAsyncNotifier<
     List<DictionaryItem>, DictionarySource> {
+  CancelToken? _cancelToken;
+
   @override
   Future<List<DictionaryItem>> build(DictionarySource arg) async {
     final client = ref.watch(dictionaryClientProvider);
@@ -185,6 +188,8 @@ class SourceItemsNotifier extends AutoDisposeFamilyAsyncNotifier<
     final client = ref.read(dictionaryClientProvider);
     final isar = ref.read(isarProvider);
 
+    _cancelToken = CancelToken();
+
     ref.read(downloadStateProvider(arg).notifier).state = DownloadBatchState(
       active: true,
       done: 0,
@@ -197,6 +202,7 @@ class SourceItemsNotifier extends AutoDisposeFamilyAsyncNotifier<
       final DictionaryItem item = entry.value;
 
       _patch(listIndex, item.copyWith(isDownloading: true, downloadProgress: 0));
+      if (!context.mounted) return;
       _setDownloadState(
           ref.read(downloadStateProvider(arg)).copyWith(
                 done: i,
@@ -209,13 +215,18 @@ class SourceItemsNotifier extends AutoDisposeFamilyAsyncNotifier<
           item.url,
           isar,
           sourceName: arg.label,
+          cancelToken: _cancelToken,
           onProgress: (progress) {
-            _patch(listIndex,
-                item.copyWith(isDownloading: true, downloadProgress: progress));
-            _setDownloadState(
-                ref.read(downloadStateProvider(arg)).copyWith(fileProgress: progress));
+            if (context.mounted) {
+              _patch(listIndex,
+                  item.copyWith(isDownloading: true, downloadProgress: progress));
+              _setDownloadState(
+                  ref.read(downloadStateProvider(arg)).copyWith(fileProgress: progress));
+            }
           },
         );
+
+        if (!context.mounted) return;
 
         _patch(
           listIndex,
@@ -227,17 +238,35 @@ class SourceItemsNotifier extends AutoDisposeFamilyAsyncNotifier<
             isSelected: false,
           ),
         );
-      } catch (_) {
-        _patch(listIndex, item.copyWith(isDownloading: false));
+      } catch (e) {
+        if (e is DioException && e.type == DioExceptionType.cancel) {
+          debugPrint('Download cancelled for ${item.name}');
+          if (context.mounted) {
+            _patch(listIndex, item.copyWith(isDownloading: false));
+          }
+          break; // Stop the whole batch loop
+        }
+        if (context.mounted) {
+          _patch(listIndex, item.copyWith(isDownloading: false));
+        }
       }
     }
 
-    _setDownloadState(
-        ref.read(downloadStateProvider(arg)).copyWith(
-              active: false,
-              done: selected.length,
-              currentFile: '',
-            ));
+    _cancelToken = null;
+
+    if (context.mounted) {
+      _setDownloadState(
+          ref.read(downloadStateProvider(arg)).copyWith(
+                active: false,
+                done: selected.length,
+                currentFile: '',
+              ));
+    }
+  }
+
+  void cancelDownloads() {
+    _cancelToken?.cancel('User stopped the download');
+    _cancelToken = null;
   }
 
   void _patch(int index, DictionaryItem item) {
@@ -414,7 +443,7 @@ class _DictionaryList extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             // ── Download progress banner ─────────────────────────────────
-            if (dlState.active) _DownloadBanner(state: dlState),
+            if (dlState.active) _DownloadBanner(state: dlState, source: source),
 
             // ── Header ────────────────────────────────────────────────────
             Padding(
@@ -470,12 +499,13 @@ class _DictionaryList extends ConsumerWidget {
 
 // ─── Download progress banner ─────────────────────────────────────────────────
 
-class _DownloadBanner extends StatelessWidget {
+class _DownloadBanner extends ConsumerWidget {
   final DownloadBatchState state;
-  const _DownloadBanner({required this.state});
+  final DictionarySource source;
+  const _DownloadBanner({required this.state, required this.source});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final cs = Theme.of(context).colorScheme;
     final overall = state.total > 0 ? state.done / state.total : 0.0;
 
@@ -489,11 +519,21 @@ class _DownloadBanner extends StatelessWidget {
               height: 16,
               child: CircularProgressIndicator(strokeWidth: 2)),
           const SizedBox(width: 8),
-          Text(
-            '${state.done} / ${state.total} downloaded',
-            style: const TextStyle(fontWeight: FontWeight.bold),
-          ),
-        ]),
+            Text(
+              '${state.done} / ${state.total} downloaded',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const Spacer(),
+            TextButton.icon(
+              onPressed: () => ref.read(sourceItemsProvider(source).notifier).cancelDownloads(),
+              icon: const Icon(Icons.stop_rounded, size: 18),
+              label: const Text('Stop', style: TextStyle(fontSize: 12)),
+              style: TextButton.styleFrom(
+                visualDensity: VisualDensity.compact,
+                foregroundColor: cs.error,
+              ),
+            ),
+          ]),
         if (state.currentFile.isNotEmpty) ...[
           const SizedBox(height: 4),
           Text('Downloading: ${state.currentFile}',

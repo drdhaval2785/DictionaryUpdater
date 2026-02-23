@@ -49,7 +49,7 @@ class _DictEntry {
   final String url;
   final String name;
   final String date;
-  final double sizeMb;
+  double sizeMb;
   final String folderPath;
   final _DictStatus status;
 
@@ -269,9 +269,46 @@ class _IndicDictBrowserScreenState extends State<IndicDictBrowserScreen> {
       final resp = await dio.get<String>(src.tarsUrl);
       final archiveUrls = _parseTarsMd(resp.data ?? '');
       final entries = archiveUrls.map((u) => _parseEntry(u, src.folderPath, localFiles, storage)).toList();
+
+      // 1. Initially show entries (some might have 0.0 MB)
       if (mounted) {
         setState(() {
           src.entries = entries;
+        });
+      }
+
+      // 2. Fetch missing sizes for external indices via HEAD requests
+      final missingSizeEntries = entries.where((e) => e.sizeMb == 0.0).toList();
+      if (missingSizeEntries.isNotEmpty) {
+        // Fetch in smaller batches of 10 to avoid hitting rate limits or hanging
+        const headBatchSize = 10;
+        for (var i = 0; i < missingSizeEntries.length; i += headBatchSize) {
+          if (!mounted) break;
+          final batch = missingSizeEntries.sublist(
+              i, (i + headBatchSize > missingSizeEntries.length) ? missingSizeEntries.length : i + headBatchSize);
+          
+          await Future.wait(batch.map((entry) async {
+            try {
+              final headResp = await dio.head(entry.url);
+              final contentLength = headResp.headers.value('content-length');
+              if (contentLength != null) {
+                final bytes = int.tryParse(contentLength) ?? 0;
+                if (mounted) {
+                  setState(() {
+                    entry.sizeMb = bytes / (1024 * 1024);
+                  });
+                }
+              }
+            } catch (e) {
+              // Silently ignore HEAD errors, keep 0.0 MB
+              debugPrint('Failed to fetch size for ${entry.url}: $e');
+            }
+          }));
+        }
+      }
+
+      if (mounted) {
+        setState(() {
           src.isFetching = false;
         });
       }
