@@ -6,6 +6,7 @@ import 'package:file_picker/file_picker.dart';
 import '../providers/providers.dart';
 import '../models/dictionary_models.dart';
 import 'source_expansion_panel.dart';
+import 'indic_dict_browser.dart';
 
 class SyncCenterScreen extends ConsumerWidget {
   const SyncCenterScreen({super.key});
@@ -27,21 +28,28 @@ class SyncCenterScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Stardict Dictionary Updater'),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.add_circle_outline),
-            tooltip: 'Add Source',
-            onPressed: () => _showAddSourceDialog(context, ref),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+            child: ElevatedButton.icon(
+              icon: const Icon(Icons.add_circle_outline, size: 18),
+              label: const Text('Add Dictionary'),
+              onPressed: () => _showAddSourceDialog(context, ref),
+            ),
           ),
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            tooltip: 'Refresh all',
-            onPressed: () {
-              ref.invalidate(sourcesProvider);
-              for (final s in allSources) {
-                ref.invalidate(sourceItemsProvider(s));
-              }
-            },
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+            child: OutlinedButton.icon(
+              icon: const Icon(Icons.refresh, size: 18),
+              label: const Text('Check for Updates'),
+              onPressed: () {
+                ref.invalidate(sourcesProvider);
+                for (final s in allSources) {
+                  ref.invalidate(sourceItemsProvider(s));
+                }
+              },
+            ),
           ),
+          const SizedBox(width: 4),
         ],
       ),
       body: sourcesAsync.when(
@@ -142,8 +150,6 @@ class SyncCenterScreen extends ConsumerWidget {
   // ─── Add Source Dialog ────────────────────────────────────────────────────
 
   void _showAddSourceDialog(BuildContext context, WidgetRef ref) {
-    final urlLabelCtrl = TextEditingController();
-    final urlCtrl = TextEditingController();
     final fileLabelCtrl = TextEditingController();
     final fileCtrl = TextEditingController();
     final pasteLabelCtrl = TextEditingController();
@@ -154,24 +160,34 @@ class SyncCenterScreen extends ConsumerWidget {
       builder: (ctx) => DefaultTabController(
         length: 3,
         child: AlertDialog(
-          title: const Text('Add Stardict Source'),
+          title: const Text('Add Dictionary'),
           content: SizedBox(
             width: double.maxFinite,
             height: 380,
             child: Column(
               children: [
                 const TabBar(
+                  isScrollable: true,
                   tabs: [
-                    Tab(icon: Icon(Icons.link), text: 'URL'),
-                    Tab(icon: Icon(Icons.file_open), text: 'File'),
-                    Tab(icon: Icon(Icons.content_paste), text: 'Paste'),
+                    Tab(icon: Icon(Icons.download_rounded), text: 'Download Indic-dicts'),
+                    Tab(icon: Icon(Icons.file_open), text: 'Import Local File'),
+                    Tab(icon: Icon(Icons.link), text: 'Download from Web'),
                   ],
                 ),
                 const SizedBox(height: 12),
                 Expanded(
                   child: TabBarView(
                     children: [
-                      _UrlTab(labelCtrl: urlLabelCtrl, urlCtrl: urlCtrl),
+                      // Tab 0: Indic-dicts launcher
+                      _IndicDictsTab(onNavigate: () {
+                        Navigator.pop(ctx);
+                        Navigator.push<void>(
+                          context,
+                          MaterialPageRoute<void>(
+                            builder: (_) => IndicDictBrowserScreen(ref: ref),
+                          ),
+                        );
+                      }),
                       _FileTab(
                           labelCtrl: fileLabelCtrl, pathCtrl: fileCtrl),
                       _PasteTab(
@@ -192,13 +208,13 @@ class SyncCenterScreen extends ConsumerWidget {
                 onPressed: () async {
                   final tab = DefaultTabController.of(tabCtx).index;
 
+                  // Tab 0 (Indic-dicts) handles its own navigation – no inline Add
+                  if (tab == 0) return;
+
                   String label;
                   String url;
 
-                  if (tab == 0) {
-                    label = urlLabelCtrl.text.trim();
-                    url = urlCtrl.text.trim();
-                  } else if (tab == 1) {
+                  if (tab == 1) {
                     label = fileLabelCtrl.text.trim();
                     url = fileCtrl.text.trim();
                   } else {
@@ -234,27 +250,43 @@ class SyncCenterScreen extends ConsumerWidget {
 
 // ─── Tab sub-widgets ──────────────────────────────────────────────────────────
 
-class _UrlTab extends StatelessWidget {
-  const _UrlTab({required this.labelCtrl, required this.urlCtrl});
-  final TextEditingController labelCtrl;
-  final TextEditingController urlCtrl;
+/// Tab 0: A simple launcher card for the Indic-dicts full-screen browser.
+class _IndicDictsTab extends StatelessWidget {
+  const _IndicDictsTab({required this.onNavigate});
+  final VoidCallback onNavigate;
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        TextField(
-            controller: labelCtrl,
-            decoration: const InputDecoration(labelText: 'Source Name')),
-        const SizedBox(height: 8),
-        TextField(
-          controller: urlCtrl,
-          decoration: const InputDecoration(
-            labelText: 'Webpage URL or Markdown file link',
-            hintText: 'https://github.com/...',
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.language, size: 56, color: Colors.indigo),
+          const SizedBox(height: 16),
+          const Text(
+            'Browse the Indic-dict repository',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+            textAlign: TextAlign.center,
           ),
-        ),
-      ]),
+          const SizedBox(height: 8),
+          const Text(
+            'Select language groups and individual dictionaries\nfrom the comprehensive Indic-dict collection.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.grey),
+          ),
+          const SizedBox(height: 24),
+          ElevatedButton.icon(
+            onPressed: onNavigate,
+            icon: const Icon(Icons.open_in_new),
+            label: const Text('Browse Indic-dicts'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.indigo,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
