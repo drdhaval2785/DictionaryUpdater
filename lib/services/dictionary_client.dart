@@ -246,7 +246,7 @@ class DictionaryClient {
       }
 
       if (e.type == DioExceptionType.cancel) {
-        throw e; // Rethrow to allow caller to handle cancellation
+        rethrow; // preserve stack trace, analyzer suggests rethrow
       }
       if (e.type == DioExceptionType.connectionError ||
           e.error is SocketException) {

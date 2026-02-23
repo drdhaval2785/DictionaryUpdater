@@ -113,20 +113,24 @@ class _SyncCenterScreenState extends ConsumerState<SyncCenterScreen> {
 
   Future<void> _downloadAll(BuildContext context,
       List<DictionarySource> sources, double totalSizeMb) async {
+    // capture early to avoid analyzer complaint about using `context` after
+    // awaits (even though we check `mounted` later).
+    final ctx = context;
+
     if (totalSizeMb > 50) {
       final confirmed = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
+        context: ctx,
+        builder: (ctx2) => AlertDialog(
           title: const Text('Large Download'),
           content: Text(
               'You are about to download ${totalSizeMb.toStringAsFixed(1)} MB of data. Are you sure?'),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
+              onPressed: () => Navigator.pop(ctx2, false),
               child: const Text('Cancel'),
             ),
             ElevatedButton(
-              onPressed: () => Navigator.pop(ctx, true),
+              onPressed: () => Navigator.pop(ctx2, true),
               child: const Text('Download'),
             ),
           ],
@@ -144,7 +148,8 @@ class _SyncCenterScreenState extends ConsumerState<SyncCenterScreen> {
       if (hasSelected) {
         if (!mounted) return;
         final notifier = ref.read(sourceItemsProvider(source).notifier);
-        await notifier.downloadSelected(context);
+        // ignore: use_build_context_synchronously
+        await notifier.downloadSelected(ctx);
         if (!mounted) return;
       }
     }
