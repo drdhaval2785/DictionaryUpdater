@@ -275,7 +275,10 @@ class DictionaryClient {
       final response = await _dio.head<dynamic>(url);
       final lm = response.headers.value(HttpHeaders.lastModifiedHeader);
       if (lm != null) return HttpDate.parse(lm);
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('Error checking remote version for $url: $e');
+      rethrow;
+    }
     return null;
   }
 }

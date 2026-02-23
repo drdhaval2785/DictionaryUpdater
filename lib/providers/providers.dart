@@ -25,7 +25,10 @@ final storageServiceProvider = Provider<StorageService>((ref) {
 
 /// Provider for Dio instance.
 final dioProvider = Provider<Dio>((ref) {
-  return Dio();
+  return Dio(BaseOptions(
+    connectTimeout: const Duration(seconds: 15),
+    receiveTimeout: const Duration(seconds: 15),
+  ));
 });
 
 /// Provider for DictionaryClient.

@@ -198,6 +198,7 @@ class _IndicDictBrowserScreenState extends State<IndicDictBrowserScreen> {
   bool _loadingIndex = true;
   String? _indexError;
   List<_TarsSource> _sources = [];
+  final List<String> _failedResources = [];
 
   // Counts for the bottom bar
   int get _fetchedCount => _sources.where((s) => s.entries != null).length;
@@ -302,6 +303,11 @@ class _IndicDictBrowserScreenState extends State<IndicDictBrowserScreen> {
             } catch (e) {
               // Silently ignore HEAD errors, keep 0.0 MB
               debugPrint('Failed to fetch size for ${entry.url}: $e');
+              if (mounted) {
+                setState(() {
+                  if (!_failedResources.contains(entry.name)) _failedResources.add(entry.name);
+                });
+              }
             }
           }));
         }
@@ -312,15 +318,69 @@ class _IndicDictBrowserScreenState extends State<IndicDictBrowserScreen> {
           src.isFetching = false;
         });
       }
-    } catch (_) {
+    } catch (e) {
       if (mounted) {
         setState(() {
           src.entries = [];
           src.isFetching = false;
           src.fetchFailed = true;
+          if (!_failedResources.contains(src.folderPath)) _failedResources.add(src.folderPath);
         });
       }
     }
+
+    if (_allFetched && _failedResources.isNotEmpty) {
+      _showFailureDialog();
+    }
+  }
+
+  void _showFailureDialog() {
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Connection Issues'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Could not connect to the following resources while updating:',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              maxHeight: 200,
+              width: double.maxFinite,
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: _failedResources.length,
+                itemBuilder: (context, index) => Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2),
+                  child: Text('• ${_failedResources[index]}', style: const TextStyle(fontSize: 12)),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'The user is requested to manually verify whether the required resource is available for download or not.',
+              style: TextStyle(fontStyle: FontStyle.italic, fontSize: 12),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              setState(() {
+                _failedResources.clear();
+              });
+              Navigator.pop(ctx);
+            },
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _addToQueue() async {

@@ -35,6 +35,12 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
     final sourcesAsync = ref.watch(sourcesProvider);
     final allSources = sourcesAsync.valueOrNull ?? [];
 
+    ref.listen(failedResourcesProvider, (prev, next) {
+      if (next.isNotEmpty) {
+        _showFailureDialog(context, ref, next);
+      }
+    });
+
     return Scaffold(
       appBar: AppBar(
         title: const Text(
@@ -162,5 +168,51 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
         '${local.day.toString().padLeft(2, '0')} '
         '${local.hour.toString().padLeft(2, '0')}:'
         '${local.minute.toString().padLeft(2, '0')}';
+  }
+
+  void _showFailureDialog(BuildContext context, WidgetRef ref, List<String> failures) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Connection Issues'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Could not connect to the following resources while updating:',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              maxHeight: 200,
+              width: double.maxFinite,
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: failures.length,
+                itemBuilder: (context, index) => Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2),
+                  child: Text('• ${failures[index]}', style: const TextStyle(fontSize: 12)),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'The user is requested to manually verify whether the required resource is available for download or not.',
+              style: TextStyle(fontStyle: FontStyle.italic, fontSize: 12),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              ref.read(failedResourcesProvider.notifier).state = [];
+              Navigator.pop(ctx);
+            },
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
   }
 }

@@ -108,35 +108,55 @@ class SourceItemsNotifier extends AutoDisposeFamilyAsyncNotifier<
     final client = ref.watch(dictionaryClientProvider);
     final isar = ref.watch(isarProvider);
 
-    final urls = await client.parseSourceList(arg.url);
+    List<String> urls = [];
+    try {
+      urls = await client.parseSourceList(arg.url);
+    } catch (e) {
+      debugPrint('Failed to parse source list for ${arg.label}: $e');
+      _reportFailure(arg.label);
+      return [];
+    }
+
     final items = <DictionaryItem>[];
     for (final url in urls) {
-      final status = await client.getDictionaryStatus(url, isar, sourceName: arg.label);
-      // Load stored metadata for timestamps
-      final meta = await client.getMetadata(url, isar, sourceName: arg.label);
+      try {
+        final status = await client.getDictionaryStatus(url, isar, sourceName: arg.label);
+        // Load stored metadata for timestamps
+        final meta = await client.getMetadata(url, isar, sourceName: arg.label);
 
-      // Parse sizeMb from filename if available
-      double? sizeMb;
-      final fileName = p.basename(url);
-      final sizeRe = RegExp(r'_([\d.]+)MB\.', caseSensitive: false);
-      final m = sizeRe.firstMatch(fileName);
-      if (m != null) {
-        sizeMb = double.tryParse(m.group(1)!);
+        // Parse sizeMb from filename if available
+        double? sizeMb;
+        final fileName = p.basename(url);
+        final sizeRe = RegExp(r'_([\d.]+)MB\.', caseSensitive: false);
+        final m = sizeRe.firstMatch(fileName);
+        if (m != null) {
+          sizeMb = double.tryParse(m.group(1)!);
+        }
+
+        items.add(DictionaryItem(
+          url: url,
+          name: fileName,
+          status: status,
+          isSelected: status == DictionaryStatus.newFile ||
+              status == DictionaryStatus.updateAvailable,
+          isDownloaded: status == DictionaryStatus.upToDate,
+          remoteLastModified: meta?.remoteLastModified,
+          lastChecked: meta?.lastChecked,
+          sizeMb: sizeMb ?? meta?.sizeMb,
+        ));
+      } catch (e) {
+        debugPrint('Failed to check status for $url: $e');
+        _reportFailure(p.basename(url));
       }
-
-      items.add(DictionaryItem(
-        url: url,
-        name: fileName,
-        status: status,
-        isSelected: status == DictionaryStatus.newFile ||
-            status == DictionaryStatus.updateAvailable,
-        isDownloaded: status == DictionaryStatus.upToDate,
-        remoteLastModified: meta?.remoteLastModified,
-        lastChecked: meta?.lastChecked,
-        sizeMb: sizeMb ?? meta?.sizeMb,
-      ));
     }
     return items;
+  }
+
+  void _reportFailure(String resource) {
+    final list = ref.read(failedResourcesProvider);
+    if (!list.contains(resource)) {
+      ref.read(failedResourcesProvider.notifier).state = [...list, resource];
+    }
   }
 
   void toggle(int index) {
