@@ -128,9 +128,10 @@ class SyncCenterScreen extends ConsumerWidget {
         children: [
           const Icon(Icons.library_books_outlined, size: 64, color: Colors.grey),
           const SizedBox(height: 16),
-          const Text('No sources yet. Add one to get started.',
-              style: TextStyle(color: Colors.grey)),
-          const SizedBox(height: 16),
+          const Text('Add Dictionaries by clicking Add Dictionary symbol above',
+              style: TextStyle(color: Colors.grey, fontSize: 13),
+              textAlign: TextAlign.center),
+          const SizedBox(height: 24),
           ElevatedButton.icon(
             onPressed: () => showAddDictionaryDialog(context, ref),
             icon: const Icon(Icons.add),

@@ -1,8 +1,10 @@
+import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 import '../providers/providers.dart';
+import '../services/storage_service.dart';
 
 // ─── Data model ────────────────────────────────────────────────────────────────
 
@@ -31,6 +33,8 @@ class _TarsSource {
   bool get anySelected => entries != null && entries!.any((e) => e.isSelected);
 }
 
+enum _DictStatus { newFile, updateAvailable, upToDate }
+
 /// A single dictionary archive inside a tars.MD.
 class _DictEntry {
   _DictEntry({
@@ -39,6 +43,7 @@ class _DictEntry {
     required this.date,
     required this.sizeMb,
     required this.folderPath,
+    required this.status,
   });
 
   final String url;
@@ -46,6 +51,7 @@ class _DictEntry {
   final String date;
   final double sizeMb;
   final String folderPath;
+  final _DictStatus status;
 
   bool isSelected = false;
 }
@@ -72,11 +78,10 @@ String _displayPath(String url) {
   return cleaned.isEmpty ? 'tars' : cleaned;
 }
 
-String _sanitize(String s) =>
-    s.trim().replaceAll(RegExp(r'[\s<>:"/\\|?*]+'), '_');
+String _sanitize(String s, StorageService storage) => storage.sanitizeFolderName(s);
 
 /// Parses dictionaryIndices.md into a flat list of _TarsSource objects.
-List<_TarsSource> _parseIndices(String markdown) {
+List<_TarsSource> _parseIndices(String markdown, StorageService storage) {
   final lines = markdown.split('\n');
   String h2 = '', h3 = '', h4 = '';
   final sources = <_TarsSource>[];
@@ -98,13 +103,13 @@ List<_TarsSource> _parseIndices(String markdown) {
       if (m != null && h2.isNotEmpty) {
         final url = m.group(1)!;
         final crumbs = [h2, if (h3.isNotEmpty) h3, if (h4.isNotEmpty) h4];
-        // Build storage folder: Indic-dict/h2/h3/h4 (sanitized)
-        final folderSegs = ['Indic-dict', ...crumbs.map(_sanitize)];
+        // Build storage folder identifier: Indic-dict/h2/h3/h4
+        final folderPath = ['Indic-dict', ...crumbs].join('/');
         sources.add(_TarsSource(
           tarsUrl: url,
           displayPath: _displayPath(url),
           breadcrumb: crumbs,
-          folderPath: p.joinAll(folderSegs),
+          folderPath: folderPath,
         ));
       }
     }
@@ -121,8 +126,9 @@ List<String> _parseTarsMd(String content) {
 }
 
 /// Extracts display metadata from a structured filename.
-_DictEntry _parseEntry(String url, String folderPath) {
-  final filename = url.split('/').last;
+_DictEntry _parseEntry(String url, String folderPath, Set<String> localFiles, StorageService storage) {
+  final rawFilename = url.split('/').last;
+  final filename = storage.sanitizeFileName(rawFilename);
 
   // 1. Try to find size (e.g. _12.5MB.) anywhere in the filename
   final sizeRe = RegExp(r'_([\d.]+)MB\.', caseSensitive: false);
@@ -138,21 +144,41 @@ _DictEntry _parseEntry(String url, String folderPath) {
 
   String name = filename;
   String date = '';
+  String baseName = filename;
 
   if (m != null) {
-    name = m.group(1)!.replaceAll('_', ' ');
+    baseName = m.group(1)!;
+    name = baseName.replaceAll('_', ' ');
     final rawDate = m.group(2)!;
     date =
         '${rawDate.substring(0, 4)}-${rawDate.substring(4, 6)}-${rawDate.substring(6, 8)}';
   }
 
-  return _DictEntry(
+  // 3. Determine status
+  _DictStatus status = _DictStatus.newFile;
+  if (localFiles.contains(filename)) {
+    status = _DictStatus.upToDate;
+  } else {
+    // Look for any file starting with the same base name
+    final matchingBase = localFiles.where((f) => f.startsWith('${baseName}_'));
+    if (matchingBase.isNotEmpty) {
+      status = _DictStatus.updateAvailable;
+    }
+  }
+
+  final entry = _DictEntry(
     url: url,
     name: name,
     date: date,
     sizeMb: sizeMb,
     folderPath: folderPath,
+    status: status,
   );
+
+  // Auto-select if new or update available
+  entry.isSelected = status != _DictStatus.upToDate;
+
+  return entry;
 }
 
 // ─── Screen ────────────────────────────────────────────────────────────────────
@@ -191,7 +217,8 @@ class _IndicDictBrowserScreenState extends State<IndicDictBrowserScreen> {
     try {
       final dio = Dio();
       final resp = await dio.get<String>(_indicesUrl);
-      final sources = _parseIndices(resp.data ?? '');
+      final storage = widget.ref.read(storageServiceProvider);
+      final sources = _parseIndices(resp.data ?? '', storage);
       if (mounted) {
         setState(() {
           _sources = sources;
@@ -212,15 +239,36 @@ class _IndicDictBrowserScreenState extends State<IndicDictBrowserScreen> {
 
   Future<void> _fetchAll(List<_TarsSource> sources) async {
     final dio = Dio();
-    await Future.wait(sources.map((src) => _fetchOne(dio, src)));
+    // Fetch in batches of 5 to avoid overloading UI/Isolates
+    const batchSize = 5;
+    for (var i = 0; i < sources.length; i += batchSize) {
+      final end = (i + batchSize < sources.length) ? i + batchSize : sources.length;
+      final batch = sources.sublist(i, end);
+      await Future.wait(batch.map((src) => _fetchOne(dio, src)));
+    }
   }
 
   Future<void> _fetchOne(Dio dio, _TarsSource src) async {
     if (mounted) setState(() => src.isFetching = true);
     try {
+      final storage = widget.ref.read(storageServiceProvider);
+      // Get the correct directory where this source's dictionaries are stored.
+      // StorageService will flatten the folderPath (sourceName) into a filesystem-safe name.
+      final dir = await storage.getStorageDirectory(sourceName: src.folderPath);
+
+      final localFiles = <String>{};
+      if (await dir.exists()) {
+        final list = await dir.list().toList();
+        for (final f in list) {
+          if (f is File) {
+            localFiles.add(p.basename(f.path));
+          }
+        }
+      }
+
       final resp = await dio.get<String>(src.tarsUrl);
       final archiveUrls = _parseTarsMd(resp.data ?? '');
-      final entries = archiveUrls.map((u) => _parseEntry(u, src.folderPath)).toList();
+      final entries = archiveUrls.map((u) => _parseEntry(u, src.folderPath, localFiles, storage)).toList();
       if (mounted) {
         setState(() {
           src.entries = entries;
@@ -251,7 +299,9 @@ class _IndicDictBrowserScreenState extends State<IndicDictBrowserScreen> {
     final notifier = widget.ref.read(sourcesProvider.notifier);
     for (final entry in groups.entries) {
       final folderPath = entry.key;
-      final dicts = entry.value;
+      final dicts = entry.value.where((d) => d.status != _DictStatus.upToDate).toList();
+      if (dicts.isEmpty) continue;
+
       // Encode all URLs as a newline-separated data: URI (same as Paste tab)
       final raw = dicts.map((d) => d.url).join('\n');
       final url = 'data:text/plain;charset=utf-8,${Uri.encodeComponent(raw)}';
@@ -557,9 +607,18 @@ class _SourceGroup extends StatelessWidget {
         title: Row(
           children: [
             Expanded(child: Text(entry.name, style: const TextStyle(fontSize: 13))),
+            if (entry.status == _DictStatus.upToDate)
+              const Text(' (Up to date)',
+                  style: TextStyle(fontSize: 11, color: Colors.green, fontWeight: FontWeight.bold))
+            else if (entry.status == _DictStatus.updateAvailable)
+              const Text(' (Update available)',
+                  style: TextStyle(fontSize: 11, color: Colors.orange, fontWeight: FontWeight.bold)),
             if (entry.sizeMb > 0)
-              Text('(${entry.sizeMb.toStringAsFixed(1)} MB)',
-                  style: const TextStyle(fontSize: 11, color: Colors.grey)),
+              Padding(
+                padding: const EdgeInsets.only(left: 8),
+                child: Text('(${entry.sizeMb.toStringAsFixed(1)} MB)',
+                    style: const TextStyle(fontSize: 11, color: Colors.grey)),
+              ),
           ],
         ),
         subtitle: entry.date.isNotEmpty

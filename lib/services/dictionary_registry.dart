@@ -10,35 +10,16 @@ class DictionaryRegistry {
   /// Default GitHub source for dictionaries.
   static const String defaultSource = 'https://github.com/indic-dict/stardict-sanskrit/blob/gh-pages/sa-head/en-entries/tars/tars.MD';
 
-  /// Initializes the registry with default sources if empty, or updates stale ones.
+  /// Removes any existing default (non-user-added) sources.
   Future<void> initializeDefaults() async {
-    final existing = await _isar.dictionarySources
+    final existingDefault = await _isar.dictionarySources
         .filter()
         .isUserAddedEqualTo(false)
         .findAll();
 
-    // Remove old default sources that don't match the current default URL
-    final stale = existing.where((s) => s.url != defaultSource).toList();
-    if (stale.isNotEmpty) {
+    if (existingDefault.isNotEmpty) {
       await _isar.writeTxn(() async {
-        await _isar.dictionarySources.deleteAll(stale.map((s) => s.id).toList());
-      });
-    }
-
-    final currentDefault = await _isar.dictionarySources
-        .filter()
-        .urlEqualTo(defaultSource)
-        .findFirst();
-
-    if (currentDefault == null) {
-      final defaultSrc = DictionarySource()
-        ..url = defaultSource
-        ..label = 'Indic-Dict Sanskrit (Default)'
-        ..isUserAdded = false
-        ..isEnabled = true;
-
-      await _isar.writeTxn(() async {
-        await _isar.dictionarySources.put(defaultSrc);
+        await _isar.dictionarySources.deleteAll(existingDefault.map((s) => s.id).toList());
       });
     }
   }

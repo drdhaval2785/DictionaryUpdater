@@ -22,7 +22,7 @@ class StorageService {
       final dir = Directory(custom);
       if (await dir.exists()) {
         if (sourceName != null && sourceName.isNotEmpty) {
-          final subDir = Directory(p.join(dir.path, sanitizeFileName(sourceName)));
+          final subDir = Directory(p.join(dir.path, sanitizeFolderName(sourceName)));
           if (!await subDir.exists()) {
             await subDir.create(recursive: true);
           }
@@ -61,7 +61,7 @@ class StorageService {
     
     final basePath = p.join(base.path, _folderName);
     final String fullPath = (sourceName != null && sourceName.isNotEmpty)
-        ? p.join(basePath, sanitizeFileName(sourceName))
+        ? p.join(basePath, sanitizeFolderName(sourceName))
         : basePath;
         
     final dir = Directory(fullPath);
@@ -72,8 +72,15 @@ class StorageService {
   }
 
   /// Sanitizes a file name to prevent path traversal and invalid characters.
-  String sanitizeFileName(String name) =>
-      name.replaceAll(RegExp(r'[<>:"/\\|?* ]'), '_');
+  /// Preserves multiple underscores.
+  String sanitizeFileName(String name) => name
+      .replaceAll(' - ', '_')
+      .replaceAll(RegExp(r'[<>:"/\\|?* ]'), '_')
+      .replaceAll(RegExp(r'^_+|_+$'), '');
+
+  /// Sanitizes a folder name, collapsing multiple underscores into one.
+  String sanitizeFolderName(String name) =>
+      sanitizeFileName(name).replaceAll(RegExp(r'_{2,}'), '_');
 
   /// Checks if a dictionary file exists locally.
   Future<bool> dictionaryExists(String fileName, {String? sourceName}) async {
