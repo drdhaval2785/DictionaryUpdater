@@ -76,6 +76,13 @@ final lastCheckedAllProvider =
   return LastCheckedAllNotifier();
 });
 
+/// Provider for accumulating resources that failed to update/download.
+///
+/// Various UI components listen to this provider and display a dialog when
+/// the list becomes non‑empty.  Notifier callers append to the list, and
+/// the dialog clears it by resetting to an empty list.
+final failedResourcesProvider = StateProvider<List<String>>((ref) => []);
+
 class LastCheckedAllNotifier extends Notifier<DateTime?> {
   static const _key = 'last_checked_all';
 

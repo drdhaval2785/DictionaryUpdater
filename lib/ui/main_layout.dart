@@ -35,7 +35,10 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
     final sourcesAsync = ref.watch(sourcesProvider);
     final allSources = sourcesAsync.valueOrNull ?? [];
 
-    ref.listen(failedResourcesProvider, (prev, next) {
+    // listen needs an explicit type argument so that `next` is treated as
+    // `List<String>` rather than `Object?` (which was causing the earlier
+    // "getter 'isNotEmpty' isn't defined for Object?" error).
+    ref.listen<List<String>>(failedResourcesProvider, (prev, next) {
       if (next.isNotEmpty) {
         _showFailureDialog(context, ref, next);
       }
@@ -171,7 +174,7 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
   }
 
   void _showFailureDialog(BuildContext context, WidgetRef ref, List<String> failures) {
-    showDialog(
+    showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Connection Issues'),
@@ -185,7 +188,10 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
             ),
             const SizedBox(height: 8),
             SizedBox(
-              maxHeight: 200,
+              // `SizedBox` no longer supports `maxHeight`; use a fixed height
+              // constraint instead. The dialog was only ever meant to be a
+              // limited scrollable area.
+              height: 200,
               width: double.maxFinite,
               child: ListView.builder(
                 shrinkWrap: true,

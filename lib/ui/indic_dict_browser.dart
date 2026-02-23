@@ -78,7 +78,6 @@ String _displayPath(String url) {
   return cleaned.isEmpty ? 'tars' : cleaned;
 }
 
-String _sanitize(String s, StorageService storage) => storage.sanitizeFolderName(s);
 
 /// Parses dictionaryIndices.md into a flat list of _TarsSource objects.
 List<_TarsSource> _parseIndices(String markdown, StorageService storage) {
@@ -290,7 +289,7 @@ class _IndicDictBrowserScreenState extends State<IndicDictBrowserScreen> {
           
           await Future.wait(batch.map((entry) async {
             try {
-              final headResp = await dio.head(entry.url);
+              final headResp = await dio.head<dynamic>(entry.url);
               final contentLength = headResp.headers.value('content-length');
               if (contentLength != null) {
                 final bytes = int.tryParse(contentLength) ?? 0;
@@ -336,7 +335,7 @@ class _IndicDictBrowserScreenState extends State<IndicDictBrowserScreen> {
 
   void _showFailureDialog() {
     if (!mounted) return;
-    showDialog(
+    showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Connection Issues'),
@@ -350,7 +349,7 @@ class _IndicDictBrowserScreenState extends State<IndicDictBrowserScreen> {
             ),
             const SizedBox(height: 8),
             SizedBox(
-              maxHeight: 200,
+              height: 200,
               width: double.maxFinite,
               child: ListView.builder(
                 shrinkWrap: true,
