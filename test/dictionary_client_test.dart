@@ -31,10 +31,11 @@ void main() {
 
     test('extracts absolute markdown links', () {
       const content =
-          '[Dict](https://example.com/mydict.tar.gz)\n[Other](https://example.com/other.zip)';
+          '[Dict](https://example.com/mydict.tar.gz)\n[Other](https://example.com/other.zip)\n[NewDict](https://example.com/new.7z)';
       final links = DictionaryClient.extractLinksForTest(content, '');
       expect(links, contains('https://example.com/mydict.tar.gz'));
       expect(links, contains('https://example.com/other.zip'));
+      expect(links, contains('https://example.com/new.7z'));
     });
 
     test('extracts relative markdown links and resolves them', () {
@@ -50,9 +51,13 @@ https://example.com/dict1.tar.gz
 https://example.com/dict2.zip
 Some other text
 https://example.com/dict3.tar.bz2
+https://example.com/dict4.rar
+https://example.com/dict5.tar.xz
 ''';
       final links = DictionaryClient.extractLinksForTest(content, '');
-      expect(links.length, equals(3));
+      expect(links.length, equals(5));
+      expect(links, contains('https://example.com/dict4.rar'));
+      expect(links, contains('https://example.com/dict5.tar.xz'));
     });
 
     test('deduplicates links', () {

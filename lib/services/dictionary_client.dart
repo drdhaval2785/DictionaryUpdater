@@ -73,7 +73,8 @@ class DictionaryClient {
   }
 
   static List<String> _extractLinks(String content, String baseUrl) {
-    const archiveExt = r'\.(?:tar\.gz|zip|tar\.bz2|dz)';
+    const archiveExt =
+        r'\.(?:tar\.gz|tgz|tar\.bz2|tbz2|tar\.xz|txz|tar\.lzma|tlz|tar\.zst|tzst|zip|7z|rar|bz2|xz|lzma|zst|dz)';
     final links = <String>{};
 
     // Absolute markdown links
@@ -106,14 +107,12 @@ class DictionaryClient {
 
     // Plain relative paths
     if (baseUrl.isNotEmpty) {
+      final archiveRegex = RegExp(archiveExt + r'$', caseSensitive: false);
       for (final line in content.split('\n')) {
         final t = line.trim().toLowerCase();
         if (t.isNotEmpty &&
             !t.startsWith('http') &&
-            (t.endsWith('.tar.gz') ||
-                t.endsWith('.zip') ||
-                t.endsWith('.tar.bz2') ||
-                t.endsWith('.dz'))) {
+            archiveRegex.hasMatch(t)) {
           links.add(Uri.parse(baseUrl).resolve(t).toString());
         }
       }
