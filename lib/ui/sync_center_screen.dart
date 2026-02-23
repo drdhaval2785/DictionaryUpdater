@@ -16,10 +16,15 @@ class SyncCenterScreen extends ConsumerWidget {
     // Collect total selected across all sources for the global FAB
     final allSources = sourcesAsync.valueOrNull ?? [];
     int totalSelected = 0;
+    double totalSizeMb = 0;
     for (final source in allSources) {
       final items =
           ref.watch(sourceItemsProvider(source)).valueOrNull ?? [];
-      totalSelected += items.where((i) => i.isSelected).length;
+      final selectedItems = items.where((i) => i.isSelected).toList();
+      totalSelected += selectedItems.length;
+      for (final item in selectedItems) {
+        totalSizeMb += item.sizeMb ?? 0;
+      }
     }
 
     return Stack(
@@ -43,8 +48,10 @@ class SyncCenterScreen extends ConsumerWidget {
             child: FloatingActionButton.extended(
               heroTag: 'global_download',
               icon: const Icon(Icons.download_rounded),
-              label: Text('Download $totalSelected from all sources'),
-              onPressed: () => _downloadAll(context, ref, allSources),
+              label: Text(totalSizeMb > 0
+                  ? 'Download $totalSelected (${totalSizeMb.toStringAsFixed(1)} MB)'
+                  : 'Download $totalSelected'),
+              onPressed: () => _downloadAll(context, ref, allSources, totalSizeMb),
             ),
           ),
       ],
@@ -53,15 +60,38 @@ class SyncCenterScreen extends ConsumerWidget {
 
   // ─── Global download ────────────────────────────────────────────────────────
 
-  Future<void> _downloadAll(
-      BuildContext context, WidgetRef ref, List<DictionarySource> sources) async {
+  Future<void> _downloadAll(BuildContext context, WidgetRef ref,
+      List<DictionarySource> sources, double totalSizeMb) async {
+    if (totalSizeMb > 50) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Large Download'),
+          content: Text(
+              'You are about to download ${totalSizeMb.toStringAsFixed(1)} MB of data. Are you sure?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Download'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true) return;
+    }
+
     for (final DictionarySource source in sources) {
       final notifier = ref.read(sourceItemsProvider(source).notifier);
       final hasSelected =
           (ref.read(sourceItemsProvider(source)).valueOrNull ?? [])
               .any((i) => i.isSelected);
       if (hasSelected) {
-        await notifier.downloadSelected();
+        if (!context.mounted) break;
+        await notifier.downloadSelected(context);
       }
     }
   }

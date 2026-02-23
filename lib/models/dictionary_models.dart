@@ -25,6 +25,8 @@ class DictionaryMetadata {
   bool isDownloaded = false;
 
   String? version;
+
+  double? sizeMb;
 }
 
 @collection

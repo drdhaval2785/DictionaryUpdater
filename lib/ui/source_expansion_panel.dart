@@ -17,6 +17,7 @@ class DictionaryItem {
   bool isDownloaded;
   final DateTime? remoteLastModified;
   final DateTime? lastChecked;
+  final double? sizeMb;
 
   DictionaryItem({
     required this.url,
@@ -28,6 +29,7 @@ class DictionaryItem {
     this.isDownloaded = false,
     this.remoteLastModified,
     this.lastChecked,
+    this.sizeMb,
   });
 
   DictionaryItem copyWith({
@@ -47,6 +49,7 @@ class DictionaryItem {
         isDownloaded: isDownloaded ?? this.isDownloaded,
         remoteLastModified: remoteLastModified,
         lastChecked: lastChecked,
+        sizeMb: sizeMb,
       );
 }
 
@@ -108,15 +111,26 @@ class SourceItemsNotifier extends AutoDisposeFamilyAsyncNotifier<
       final status = await client.getDictionaryStatus(url, isar, sourceName: arg.label);
       // Load stored metadata for timestamps
       final meta = await client.getMetadata(url, isar, sourceName: arg.label);
+
+      // Parse sizeMb from filename if available
+      double? sizeMb;
+      final fileName = p.basename(url);
+      final sizeRe = RegExp(r'_([\d.]+)MB\.', caseSensitive: false);
+      final m = sizeRe.firstMatch(fileName);
+      if (m != null) {
+        sizeMb = double.tryParse(m.group(1)!);
+      }
+
       items.add(DictionaryItem(
         url: url,
-        name: p.basename(url),
+        name: fileName,
         status: status,
         isSelected: status == DictionaryStatus.newFile ||
             status == DictionaryStatus.updateAvailable,
         isDownloaded: status == DictionaryStatus.upToDate,
         remoteLastModified: meta?.remoteLastModified,
         lastChecked: meta?.lastChecked,
+        sizeMb: sizeMb ?? meta?.sizeMb,
       ));
     }
     return items;
@@ -137,13 +151,36 @@ class SourceItemsNotifier extends AutoDisposeFamilyAsyncNotifier<
   }
 
   /// Download all selected items and persist metadata to Isar.
-  Future<void> downloadSelected() async {
+  Future<void> downloadSelected(BuildContext context) async {
     final items = state.valueOrNull;
     if (items == null) return;
 
     final selected =
         items.asMap().entries.where((e) => e.value.isSelected).toList();
     if (selected.isEmpty) return;
+
+    final totalSizeMb = selected.fold<double>(0, (sum, e) => sum + (e.value.sizeMb ?? 0));
+    if (totalSizeMb > 50) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Large Download'),
+          content: Text(
+              'You are about to download ${totalSizeMb.toStringAsFixed(1)} MB from this source. Are you sure?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Download'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true) return;
+    }
 
     final client = ref.read(dictionaryClientProvider);
     final isar = ref.read(isarProvider);
@@ -360,7 +397,9 @@ class _DictionaryList extends ConsumerWidget {
           );
         }
 
-        final selectedCount = items.where((i) => i.isSelected).length;
+        final selectedItems = items.where((i) => i.isSelected).toList();
+        final selectedCount = selectedItems.length;
+        final totalSizeMb = selectedItems.fold<double>(0, (sum, i) => sum + (i.sizeMb ?? 0));
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -393,9 +432,11 @@ class _DictionaryList extends ConsumerWidget {
                     FilledButton.icon(
                       onPressed: () => ref
                           .read(sourceItemsProvider(source).notifier)
-                          .downloadSelected(),
+                          .downloadSelected(context),
                       icon: const Icon(Icons.download, size: 16),
-                      label: Text('Download $selectedCount'),
+                      label: Text(totalSizeMb > 0
+                          ? 'Download $selectedCount (${totalSizeMb.toStringAsFixed(1)} MB)'
+                          : 'Download $selectedCount'),
                     ),
                 ],
               ),
@@ -520,7 +561,14 @@ class _DictionaryTile extends ConsumerWidget {
                   : Icons.radio_button_off,
               color: item.isSelected ? theme.colorScheme.primary : Colors.grey,
             ),
-      title: Text(item.name, style: const TextStyle(fontSize: 14)),
+      title: Row(
+        children: [
+          Expanded(child: Text(item.name, style: const TextStyle(fontSize: 14))),
+          if (item.sizeMb != null)
+            Text('(${item.sizeMb!.toStringAsFixed(1)} MB)',
+                style: const TextStyle(fontSize: 12, color: Colors.grey)),
+        ],
+      ),
       subtitle: item.isDownloading
           ? LinearProgressIndicator(
               value: item.downloadProgress > 0 ? item.downloadProgress : null,

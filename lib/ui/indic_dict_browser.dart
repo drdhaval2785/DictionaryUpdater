@@ -364,7 +364,13 @@ class _IndicDictBrowserScreenState extends State<IndicDictBrowserScreen> {
 
   Widget _buildBottomBar() {
     if (_loadingIndex) return const SizedBox.shrink();
-    final count = _selectedDicts.length;
+    final selected = _selectedDicts;
+    final count = selected.length;
+    final totalSizeMb = selected.fold<double>(0.0, (sum, e) {
+      final s = e.sizeMb.replaceAll('MB', '').trim();
+      return sum + (double.tryParse(s) ?? 0.0);
+    });
+
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.all(12),
@@ -372,7 +378,7 @@ class _IndicDictBrowserScreenState extends State<IndicDictBrowserScreen> {
           onPressed: count > 0 ? _addToQueue : null,
           icon: const Icon(Icons.add_task),
           label: Text(count > 0
-              ? 'Add $count dictionar${count == 1 ? 'y' : 'ies'} to Queue'
+              ? 'Add $count (${totalSizeMb.toStringAsFixed(1)} MB) to Queue'
               : 'Select dictionaries above'),
           style: ElevatedButton.styleFrom(
             minimumSize: const Size.fromHeight(48),
@@ -539,10 +545,16 @@ class _SourceGroup extends StatelessWidget {
         dense: true,
         controlAffinity: ListTileControlAffinity.leading,
         value: entry.isSelected,
-        title: Text(entry.name, style: const TextStyle(fontSize: 13)),
+        title: Row(
+          children: [
+            Expanded(child: Text(entry.name, style: const TextStyle(fontSize: 13))),
+            if (entry.sizeMb.isNotEmpty)
+              Text('(${entry.sizeMb})',
+                  style: const TextStyle(fontSize: 11, color: Colors.grey)),
+          ],
+        ),
         subtitle: entry.date.isNotEmpty
-            ? Text('${entry.date}  •  ${entry.sizeMb}',
-                style: const TextStyle(fontSize: 11))
+            ? Text(entry.date, style: const TextStyle(fontSize: 11))
             : null,
         onChanged: (v) {
           entry.isSelected = v ?? false;

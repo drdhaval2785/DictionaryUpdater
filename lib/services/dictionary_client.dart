@@ -208,6 +208,8 @@ class DictionaryClient {
       );
 
       final file = File(savePath);
+      final sizeInBytes = await file.length();
+      final sizeMb = sizeInBytes / (1024 * 1024);
 
       // Persist metadata so next launch detects this file as up-to-date.
       DateTime? remoteModified;
@@ -222,7 +224,8 @@ class DictionaryClient {
         ..localPath = savePath
         ..lastUpdated = remoteModified ?? DateTime.now()
         ..remoteLastModified = remoteModified
-        ..isDownloaded = true;
+        ..isDownloaded = true
+        ..sizeMb = sizeMb;
 
       await isar.writeTxn(() => isar.dictionaryMetadatas.put(meta));
 
