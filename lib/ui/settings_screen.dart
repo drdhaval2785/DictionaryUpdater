@@ -70,14 +70,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return const Center(child: CircularProgressIndicator());
     }
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Settings')),
-      body: ListView(
+    return ListView(
         padding: const EdgeInsets.all(16.0),
         children: [
           const Text(
@@ -127,7 +123,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             onTap: _resetPath,
           ),
         ],
-      ),
-    );
+      );
   }
 }

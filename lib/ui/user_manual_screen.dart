@@ -7,20 +7,17 @@ class UserManualScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('User Manual')),
-      body: FutureBuilder<String>(
-        future: rootBundle.loadString('USER_GUIDE.md'),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.hasError) {
-            return Center(child: Text('Error loading manual: ${snapshot.error}'));
-          }
-          return Markdown(data: snapshot.data ?? 'No guide found.');
-        },
-      ),
+    return FutureBuilder<String>(
+      future: rootBundle.loadString('USER_GUIDE.md'),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          return Center(child: Text('Error loading manual: ${snapshot.error}'));
+        }
+        return Markdown(data: snapshot.data ?? 'No guide found.');
+      },
     );
   }
 }
