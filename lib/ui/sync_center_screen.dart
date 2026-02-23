@@ -27,6 +27,7 @@ class SyncCenterScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Stardict Dictionary Updater'),
+        toolbarHeight: 72,
         actions: [
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
@@ -38,15 +39,38 @@ class SyncCenterScreen extends ConsumerWidget {
           ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
-            child: OutlinedButton.icon(
-              icon: const Icon(Icons.refresh, size: 18),
-              label: const Text('Check for Updates'),
-              onPressed: () {
-                ref.invalidate(sourcesProvider);
-                for (final s in allSources) {
-                  ref.invalidate(sourceItemsProvider(s));
-                }
-              },
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.refresh, size: 18),
+                  label: const Text('Check for Updates'),
+                  onPressed: () {
+                    ref.invalidate(sourcesProvider);
+                    for (final s in allSources) {
+                      ref.invalidate(sourceItemsProvider(s));
+                    }
+                    ref.read(lastCheckedAllProvider.notifier).updateTimestamp();
+                  },
+                ),
+                Consumer(
+                  builder: (context, ref, child) {
+                    final lastChecked = ref.watch(lastCheckedAllProvider);
+                    if (lastChecked == null) return const SizedBox.shrink();
+                    return Padding(
+                      padding: const EdgeInsets.only(top: 2, right: 4),
+                      child: Text(
+                        'Last checked for updates upstream on ${_fmtDt(lastChecked)}',
+                        style: const TextStyle(
+                          fontSize: 9,
+                          color: Colors.grey,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ],
             ),
           ),
           const SizedBox(width: 4),
@@ -91,6 +115,15 @@ class SyncCenterScreen extends ConsumerWidget {
     }
   }
 
+  String _fmtDt(DateTime dt) {
+    final local = dt.toLocal();
+    return '${local.year}-'
+        '${local.month.toString().padLeft(2, '0')}-'
+        '${local.day.toString().padLeft(2, '0')} '
+        '${local.hour.toString().padLeft(2, '0')}:'
+        '${local.minute.toString().padLeft(2, '0')}';
+  }
+
   // ─── Empty state ─────────────────────────────────────────────────────────────
 
   Widget _buildEmptyState(BuildContext context, WidgetRef ref) {
@@ -106,7 +139,7 @@ class SyncCenterScreen extends ConsumerWidget {
           ElevatedButton.icon(
             onPressed: () => _showAddSourceDialog(context, ref),
             icon: const Icon(Icons.add),
-            label: const Text('Add Stardict Source'),
+            label: const Text('Add Dictionary'),
           ),
         ],
       ),
@@ -265,25 +298,18 @@ class _IndicDictsTab extends StatelessWidget {
           const SizedBox(height: 16),
           const Text(
             'Browse the Indic-dict repository',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 4),
           const Text(
-            'Select language groups and individual dictionaries\nfrom the comprehensive Indic-dict collection.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.grey),
+            'Select from hundreds of scholarly dictionaries',
+            style: TextStyle(fontSize: 12, color: Colors.grey),
           ),
           const SizedBox(height: 24),
           ElevatedButton.icon(
             onPressed: onNavigate,
-            icon: const Icon(Icons.open_in_new),
-            label: const Text('Browse Indic-dicts'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.indigo,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-            ),
+            icon: const Icon(Icons.search),
+            label: const Text('Open Browser'),
           ),
         ],
       ),
@@ -299,21 +325,16 @@ class _FileTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
-      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      child: Column(children: [
         TextField(
             controller: labelCtrl,
             decoration: const InputDecoration(labelText: 'Source Name')),
         const SizedBox(height: 8),
         TextField(
-          controller: pathCtrl,
-          readOnly: true,
-          decoration: const InputDecoration(
-            labelText: 'Selected file',
-            hintText: 'Tap button below to select',
-            border: OutlineInputBorder(),
-          ),
-        ),
-        const SizedBox(height: 12),
+            controller: pathCtrl,
+            enabled: false,
+            decoration: const InputDecoration(labelText: 'File Path (auto-filled)')),
+        const SizedBox(height: 16),
         ElevatedButton.icon(
           onPressed: () async {
             final FilePickerResult? result =

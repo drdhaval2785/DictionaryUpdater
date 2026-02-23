@@ -66,3 +66,28 @@ class SourcesNotifier extends AsyncNotifier<List<DictionarySource>> {
     ref.invalidateSelf();
   }
 }
+
+/// Provider for the global "Last checked for updates" timestamp.
+final lastCheckedAllProvider =
+    NotifierProvider<LastCheckedAllNotifier, DateTime?>(() {
+  return LastCheckedAllNotifier();
+});
+
+class LastCheckedAllNotifier extends Notifier<DateTime?> {
+  static const _key = 'last_checked_all';
+
+  @override
+  DateTime? build() {
+    final prefs = ref.watch(sharedPreferencesProvider);
+    final stored = prefs.getString(_key);
+    if (stored == null) return null;
+    return DateTime.tryParse(stored);
+  }
+
+  Future<void> updateTimestamp() async {
+    final now = DateTime.now();
+    final prefs = ref.read(sharedPreferencesProvider);
+    await prefs.setString(_key, now.toIso8601String());
+    state = now;
+  }
+}
