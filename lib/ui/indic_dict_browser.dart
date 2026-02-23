@@ -215,7 +215,11 @@ class _IndicDictBrowserScreenState extends State<IndicDictBrowserScreen> {
 
   Future<void> _loadIndex() async {
     try {
-      final dio = Dio();
+      // GitHub raw sometimes rejects requests that don’t supply a browser-like
+      // User-Agent; use a simple UA string to avoid 401 responses.
+      final dio = Dio(BaseOptions(headers: {
+        'User-Agent': 'Mozilla/5.0 (Flutter)'
+      }));
       final resp = await dio.get<String>(_indicesUrl);
       final storage = widget.ref.read(storageServiceProvider);
       final sources = _parseIndices(resp.data ?? '', storage);
@@ -238,13 +242,27 @@ class _IndicDictBrowserScreenState extends State<IndicDictBrowserScreen> {
   }
 
   Future<void> _fetchAll(List<_TarsSource> sources) async {
-    final dio = Dio();
+    // Use same UA for all subsequent network requests as well.
+    final dio = Dio(BaseOptions(headers: {
+      'User-Agent': 'Mozilla/5.0 (Flutter)'
+    }));
     // Fetch in batches of 5 to avoid overloading UI/Isolates
     const batchSize = 5;
     for (var i = 0; i < sources.length; i += batchSize) {
       final end = (i + batchSize < sources.length) ? i + batchSize : sources.length;
       final batch = sources.sublist(i, end);
       await Future.wait(batch.map((src) => _fetchOne(dio, src)));
+    }
+
+    // All sources have now completed; show a single dialog if any failures
+    if (_failedResources.isNotEmpty) {
+      final uniqueFailures = _failedResources.toSet().toList();
+      setState(() {
+        _failedResources
+          ..clear()
+          ..addAll(uniqueFailures);
+      });
+      _showFailureDialog();
     }
   }
 
@@ -254,18 +272,67 @@ class _IndicDictBrowserScreenState extends State<IndicDictBrowserScreen> {
       final storage = widget.ref.read(storageServiceProvider);
       // Get the correct directory where this source's dictionaries are stored.
       // StorageService will flatten the folderPath (sourceName) into a filesystem-safe name.
-      final dir = await storage.getStorageDirectory(sourceName: src.folderPath);
+      Directory dir;
+      try {
+        dir = await storage.getStorageDirectory(sourceName: src.folderPath);
+      } on PathAccessException catch (e) {
+        debugPrint('Cannot create/access storage directory for ${src.folderPath}: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                  'Cannot access storage for "${src.folderPath}".\n'
+                  'Check Downloads permissions or change storage location.'),
+            ),
+          );
+          setState(() {
+            src.isFetching = false;
+            src.fetchFailed = true;
+          });
+        }
+        // Skip this source rather than treating it as a network failure. The
+        // failure dialog isn't helpful in this case because it's a local
+        // permission problem, and the snackbar above already alerts the user.
+        return;
+      }
 
+      // Attempt to gather already-downloaded files so we can mark them as
+      // up-to-date.  On macOS the Downloads folder is protected by privacy
+      // restrictions; if the user has denied access to this particular
+      // directory we may get a PathAccessException.  That should not prevent us
+      // from fetching the listing from the network, so treat failures here as
+      // an empty directory and report a log entry.
       final localFiles = <String>{};
       if (await dir.exists()) {
-        final list = await dir.list().toList();
-        for (final f in list) {
-          if (f is File) {
-            localFiles.add(p.basename(f.path));
+        try {
+          final list = await dir.list().toList();
+          for (final f in list) {
+            if (f is File) {
+              localFiles.add(p.basename(f.path));
+            }
           }
+        } on PathAccessException catch (e) {
+          debugPrint(
+              'Permission denied accessing local storage for ${src.folderPath}: $e');
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                    'Cannot access storage for "${src.folderPath}".\n'
+                    'Check Downloads permissions or change storage location.'),
+              ),
+            );
+          }
+          // Continue with empty `localFiles` rather than aborting the whole
+          // fetch; the user may need to grant filesystem permission or
+          // choose a different storage directory via settings.
         }
       }
 
+      // Fetch the tars listing.  GitHub raw content can occasionally return
+      // 401 if the User-Agent is missing or unrecognized; we already configured
+      // the dio client above with a browser-like UA, but log any errors that
+      // occur so they can be inspected in the console.
       final resp = await dio.get<String>(src.tarsUrl);
       final archiveUrls = _parseTarsMd(resp.data ?? '');
       final entries = archiveUrls.map((u) => _parseEntry(u, src.folderPath, localFiles, storage)).toList();
@@ -300,13 +367,11 @@ class _IndicDictBrowserScreenState extends State<IndicDictBrowserScreen> {
                 }
               }
             } catch (e) {
-              // Silently ignore HEAD errors, keep 0.0 MB
-              debugPrint('Failed to fetch size for ${entry.url}: $e');
-              if (mounted) {
-                setState(() {
-                  if (!_failedResources.contains(entry.name)) _failedResources.add(entry.name);
-                });
-              }
+              // HEAD requests sometimes return 401/403 for GitHub-hosted files; we
+              // don't care about the exact size, so just log and move on.  Do **not**
+              // add the entry to `_failedResources`, since the download itself may
+              // still succeed.
+              debugPrint('Size query failed for ${entry.url}: $e');
             }
           }));
         }
@@ -318,19 +383,25 @@ class _IndicDictBrowserScreenState extends State<IndicDictBrowserScreen> {
         });
       }
     } catch (e) {
+      // Report the failure to fetch the tars.MD itself; include URL so it's
+      // easier to debug which link is problematic.
+      debugPrint('Failed to fetch tars for ${src.folderPath}: $e (url ${src.tarsUrl})');
       if (mounted) {
         setState(() {
           src.entries = [];
           src.isFetching = false;
           src.fetchFailed = true;
-          if (!_failedResources.contains(src.folderPath)) _failedResources.add(src.folderPath);
+          final failLabel = '${src.folderPath} → ${src.tarsUrl}';
+          if (!_failedResources.contains(failLabel)) _failedResources.add(failLabel);
         });
       }
     }
 
-    if (_allFetched && _failedResources.isNotEmpty) {
-      _showFailureDialog();
-    }
+    // Dialog will be shown once all sources have been processed.  Removing
+    // this check prevents multiple simultaneous `_fetchOne` completions from
+    // each spawning their own alert.
+    //
+    // (The check is now performed from `_fetchAll` after all batches finish.)
   }
 
   void _showFailureDialog() {
