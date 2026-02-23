@@ -271,10 +271,14 @@ class _SourceExpansionPanelState extends ConsumerState<SourceExpansionPanel> {
     final theme = Theme.of(context);
     // Watch item count & selection for badge
     final asyncItems = ref.watch(sourceItemsProvider(widget.source));
-    final selectedCount = asyncItems.valueOrNull
-            ?.where((i) => i.isSelected)
-            .length ??
-        0;
+    final items = asyncItems.valueOrNull ?? [];
+    final selectedItems = items.where((i) => i.isSelected).toList();
+    final selectedCount = selectedItems.length;
+    final selectedSize = selectedItems.fold<double>(
+        0.0, (double sum, i) => sum + (i.sizeMb ?? 0.0));
+    final totalFiles = items.length;
+    final totalSize =
+        items.fold<double>(0.0, (double sum, i) => sum + (i.sizeMb ?? 0.0));
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -289,22 +293,24 @@ class _SourceExpansionPanelState extends ConsumerState<SourceExpansionPanel> {
             ),
             if (selectedCount > 0)
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
-                  color: theme.colorScheme.primary,
+                  color: theme.colorScheme.primaryContainer,
                   borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: theme.colorScheme.primary),
                 ),
                 child: Text(
-                  '$selectedCount selected',
+                  '$selectedCount selected (${selectedSize.toStringAsFixed(1)} MB)',
                   style: TextStyle(
-                      color: theme.colorScheme.onPrimary, fontSize: 11),
+                      color: theme.colorScheme.onPrimaryContainer,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold),
                 ),
               ),
           ],
         ),
         subtitle: Text(
-          _sourceSubtitle(widget.source),
+          _sourceSubtitle(widget.source, totalFiles, totalSize),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: const TextStyle(fontSize: 12),
@@ -326,11 +332,14 @@ class _SourceExpansionPanelState extends ConsumerState<SourceExpansionPanel> {
     );
   }
 
-  String _sourceSubtitle(DictionarySource source) {
-    if (!source.url.startsWith('data:')) return source.url;
-    // Detect Indic-dict sources by label prefix
-    if (source.label.startsWith('Indic-dict')) return 'Indic-dict';
-    return '(Pasted list)';
+  String _sourceSubtitle(
+      DictionarySource source, int totalFiles, double totalSize) {
+    final base = (!source.url.startsWith('data:'))
+        ? source.url
+        : ((source.label.startsWith('Indic-dict'))
+            ? 'Indic-dict'
+            : '(Pasted list)');
+    return '$base • $totalFiles files (${totalSize.toStringAsFixed(1)} MB)';
   }
 
   Future<void> _confirmDelete(BuildContext context) async {

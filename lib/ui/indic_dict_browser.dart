@@ -44,7 +44,7 @@ class _DictEntry {
   final String url;
   final String name;
   final String date;
-  final String sizeMb;
+  final double sizeMb;
   final String folderPath;
 
   bool isSelected = false;
@@ -123,24 +123,36 @@ List<String> _parseTarsMd(String content) {
 /// Extracts display metadata from a structured filename.
 _DictEntry _parseEntry(String url, String folderPath) {
   final filename = url.split('/').last;
-  final re = RegExp(
+
+  // 1. Try to find size (e.g. _12.5MB.) anywhere in the filename
+  final sizeRe = RegExp(r'_([\d.]+)MB\.', caseSensitive: false);
+  final sm = sizeRe.firstMatch(filename);
+  final sizeMb = sm != null ? (double.tryParse(sm.group(1)!) ?? 0.0) : 0.0;
+
+  // 2. Try to parse structured name/date
+  final fullRe = RegExp(
     r'^(.+?)_(\d{8})_(\d{6})_([\d.]+)MB\.(.+)$',
     caseSensitive: false,
   );
-  final m = re.firstMatch(filename);
+  final m = fullRe.firstMatch(filename);
+
+  String name = filename;
+  String date = '';
+
   if (m != null) {
+    name = m.group(1)!.replaceAll('_', ' ');
     final rawDate = m.group(2)!;
-    final date =
+    date =
         '${rawDate.substring(0, 4)}-${rawDate.substring(4, 6)}-${rawDate.substring(6, 8)}';
-    return _DictEntry(
-      url: url,
-      name: m.group(1)!.replaceAll('_', ' '),
-      date: date,
-      sizeMb: '${m.group(4)} MB',
-      folderPath: folderPath,
-    );
   }
-  return _DictEntry(url: url, name: filename, date: '', sizeMb: '', folderPath: folderPath);
+
+  return _DictEntry(
+    url: url,
+    name: name,
+    date: date,
+    sizeMb: sizeMb,
+    folderPath: folderPath,
+  );
 }
 
 // ─── Screen ────────────────────────────────────────────────────────────────────
@@ -366,10 +378,7 @@ class _IndicDictBrowserScreenState extends State<IndicDictBrowserScreen> {
     if (_loadingIndex) return const SizedBox.shrink();
     final selected = _selectedDicts;
     final count = selected.length;
-    final totalSizeMb = selected.fold<double>(0.0, (sum, e) {
-      final s = e.sizeMb.replaceAll('MB', '').trim();
-      return sum + (double.tryParse(s) ?? 0.0);
-    });
+    final totalSizeMb = selected.fold<double>(0.0, (sum, e) => sum + e.sizeMb);
 
     return SafeArea(
       child: Padding(
@@ -548,8 +557,8 @@ class _SourceGroup extends StatelessWidget {
         title: Row(
           children: [
             Expanded(child: Text(entry.name, style: const TextStyle(fontSize: 13))),
-            if (entry.sizeMb.isNotEmpty)
-              Text('(${entry.sizeMb})',
+            if (entry.sizeMb > 0)
+              Text('(${entry.sizeMb.toStringAsFixed(1)} MB)',
                   style: const TextStyle(fontSize: 11, color: Colors.grey)),
           ],
         ),

@@ -32,11 +32,34 @@ class SyncCenterScreen extends ConsumerWidget {
         sourcesAsync.when(
           data: (sources) => sources.isEmpty
               ? _buildEmptyState(context, ref)
-              : ListView.builder(
-                  itemCount: sources.length,
-                  padding: const EdgeInsets.only(bottom: 80),
-                  itemBuilder: (_, i) =>
-                      SourceExpansionPanel(source: sources[i]),
+              : Column(
+                  children: [
+                    if (totalSelected > 0)
+                      Container(
+                        width: double.infinity,
+                        color: Theme.of(context).colorScheme.primaryContainer,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 8),
+                        child: Text(
+                          'Total Selection: $totalSelected dictionaries (${totalSizeMb.toStringAsFixed(1)} MB)',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onPrimaryContainer,
+                          ),
+                        ),
+                      ),
+                    Expanded(
+                      child: ListView.builder(
+                        itemCount: sources.length,
+                        padding: const EdgeInsets.only(bottom: 80),
+                        itemBuilder: (_, i) =>
+                            SourceExpansionPanel(source: sources[i]),
+                      ),
+                    ),
+                  ],
                 ),
           loading: () => _buildShimmer(),
           error: (err, _) => _buildError(err.toString()),
