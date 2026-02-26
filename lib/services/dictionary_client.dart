@@ -42,14 +42,7 @@ class DictionaryClient {
       String content;
       String baseUrl = '';
 
-      if (url.startsWith('file://')) {
-        final filePath = Uri.parse(url).toFilePath();
-        content = await File(filePath).readAsString();
-        final fileUri = Uri.file(filePath);
-        final segs =
-            fileUri.pathSegments.sublist(0, fileUri.pathSegments.length - 1);
-        baseUrl = '${fileUri.replace(pathSegments: segs)}/';
-      } else if (url.startsWith('data:')) {
+      if (url.startsWith('data:')) {
         final comma = url.indexOf(',');
         content = Uri.decodeComponent(url.substring(comma + 1));
         baseUrl = '';
@@ -75,12 +68,12 @@ class DictionaryClient {
 
   static List<String> _extractLinks(String content, String baseUrl) {
     const archiveExt =
-        r'\.(?:tar\.gz|tgz|tar\.bz2|tbz2|tar\.xz|txz|tar\.lzma|tlz|tar\.zst|tzst|zip|7z|rar|bz2|xz|lzma|zst|dz)';
+        r'\.(?:tar\.gz|tgz|tar\.bz2|tbz2|tar\.xz|txz|tar\.lzma|tlz|tar\.zst|tzst|zip|7z|rar|bz2|xz|lzma|zst|dz|ifo|index|dict|idx|md|txt)(?!\w)';
     final links = <String>{};
 
-    // Absolute markdown links
+    // Absolute markdown links (http)
     final absMarkdown = RegExp(
-        r'\[.*?\]\((https?://[^\s)]+?' + archiveExt + r')\)',
+        r'\[.*?\]\(((?:https?)://[^\s)]+' + archiveExt + r')\)',
         caseSensitive: false);
     for (final m in absMarkdown.allMatches(content)) {
       final l = m.group(1);
@@ -90,7 +83,7 @@ class DictionaryClient {
     // Relative markdown links
     if (baseUrl.isNotEmpty) {
       final relMarkdown = RegExp(
-          r'\[.*?\]\(((?:\.{0,2}/)?[^\s)]+?' + archiveExt + r')\)',
+          r'\[.*?\]\(((?:\.{0,2}/)?[^\s)]+' + archiveExt + r')\)',
           caseSensitive: false);
       for (final m in relMarkdown.allMatches(content)) {
         final rel = m.group(1);
@@ -101,7 +94,8 @@ class DictionaryClient {
     }
 
     // Plain absolute URLs
-    final plainAbs = RegExp(r'https?://\S+?' + archiveExt, caseSensitive: false);
+    // Using [^\s"'<>]+ for better boundary control
+    final plainAbs = RegExp(r'''(?:https?)://[^\s"'<>]+''' + archiveExt, caseSensitive: false);
     for (final m in plainAbs.allMatches(content)) {
       links.add(m.group(0)!);
     }
@@ -110,10 +104,11 @@ class DictionaryClient {
     if (baseUrl.isNotEmpty) {
       final archiveRegex = RegExp(archiveExt + r'$', caseSensitive: false);
       for (final line in content.split('\n')) {
-        final t = line.trim().toLowerCase();
+        final t = line.trim();
+        final tl = t.toLowerCase();
         if (t.isNotEmpty &&
-            !t.startsWith('http') &&
-            archiveRegex.hasMatch(t)) {
+            !tl.startsWith('http') &&
+            archiveRegex.hasMatch(tl)) {
           links.add(Uri.parse(baseUrl).resolve(t).toString());
         }
       }
@@ -129,11 +124,6 @@ class DictionaryClient {
   // ─── Status check ──────────────────────────────────────────────────────────
 
   /// Returns the update status for a dictionary file.
-  /// Priority:
-  ///  1. If file does NOT exist on disk → newFile
-  ///  2. If file exists but no Isar record → upToDate (treat pre-existing files as current)
-  ///  3. If remote Last-Modified > local lastUpdated → updateAvailable
-  ///  4. Otherwise → upToDate
   Future<DictionaryStatus> getDictionaryStatus(String url, Isar isar, {String? sourceName}) async {
     final fileName = _storageService.sanitizeFileName(p.basename(url));
     final fileExists = await _storageService.dictionaryExists(fileName, sourceName: sourceName);
@@ -193,8 +183,7 @@ class DictionaryClient {
 
   // ─── Download ──────────────────────────────────────────────────────────────
 
-  /// Downloads a dictionary and persists metadata to Isar so it is recognized
-  /// as "up to date" on next launch.
+  /// Downloads a dictionary and persists metadata to Isar.
   Future<File> downloadDictionary(
     String url,
     Isar isar, {
@@ -266,13 +255,14 @@ class DictionaryClient {
         throw Exception(
             'Network error: Failed to connect. Please check your internet connection.');
       }
-      throw Exception('Download failed: ${e.message}');
+      throw Exception('Download failed (${e.type}): ${e.message ?? e.error ?? 'Unknown error'}');
     } catch (e) {
       // Clean up partial file on other errors too
       final partialFile = File(savePath);
       if (await partialFile.exists()) {
         await partialFile.delete();
       }
+      debugPrint('DictionaryClient error during download: $e');
       throw Exception('Download failed: $e');
     }
   }
@@ -280,10 +270,6 @@ class DictionaryClient {
   // ─── Remote version ────────────────────────────────────────────────────────
 
   Future<DateTime?> checkRemoteVersion(String url) async {
-    if (url.startsWith('file://')) {
-      final file = File(Uri.parse(url).toFilePath());
-      return (await file.exists()) ? file.lastModified() : null;
-    }
     try {
       final response = await _dio.head<dynamic>(url);
       final lm = response.headers.value(HttpHeaders.lastModifiedHeader);

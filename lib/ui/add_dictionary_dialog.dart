@@ -1,13 +1,9 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:file_picker/file_picker.dart';
 import '../providers/providers.dart';
 import 'indic_dict_browser.dart';
 
 void showAddDictionaryDialog(BuildContext context, WidgetRef ref) {
-  final fileLabelCtrl = TextEditingController();
-  final fileCtrl = TextEditingController();
   final pasteLabelCtrl = TextEditingController();
   final pasteCtrl = TextEditingController();
 
@@ -38,29 +34,7 @@ void showAddDictionaryDialog(BuildContext context, WidgetRef ref) {
                 },
               ),
               const SizedBox(height: 12),
-              // Option 2: Local File (Expandable)
-              _ExpandableCategoryCard(
-                icon: Icons.file_open_rounded,
-                title: 'Import Local File',
-                subtitle: 'Select .md, .txt or .zip from device',
-                color: Colors.teal,
-                child: Column(
-                  children: [
-                    _FileTab(labelCtrl: fileLabelCtrl, pathCtrl: fileCtrl),
-                    const SizedBox(height: 12),
-                    SizedBox(
-                      width: double.infinity,
-                      child: FilledButton.icon(
-                        onPressed: () => _handleAdd(ref, context, ctx, fileLabelCtrl, fileCtrl, isLocal: true),
-                        icon: const Icon(Icons.add_task),
-                        label: const Text('Import File'),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12),
-              // Option 3: Web (Expandable)
+              // Option 2: Web (Expandable)
               _ExpandableCategoryCard(
                 icon: Icons.link_rounded,
                 title: 'Download from Web',
@@ -74,7 +48,7 @@ void showAddDictionaryDialog(BuildContext context, WidgetRef ref) {
                       width: double.infinity,
                       child: FilledButton.icon(
                         style: FilledButton.styleFrom(backgroundColor: Colors.orange),
-                        onPressed: () => _handleAdd(ref, context, ctx, pasteLabelCtrl, pasteCtrl, isLocal: false),
+                        onPressed: () => _handleAdd(ref, context, ctx, pasteLabelCtrl, pasteCtrl),
                         icon: const Icon(Icons.cloud_download),
                         label: const Text('Add Links'),
                       ),
@@ -186,8 +160,7 @@ Future<void> _handleAdd(
     BuildContext context,
     BuildContext dialogCtx,
     TextEditingController labelCtrl,
-    TextEditingController contentCtrl,
-    {required bool isLocal}) async {
+    TextEditingController contentCtrl) async {
   final label = labelCtrl.text.trim();
   final raw = contentCtrl.text.trim();
   
@@ -197,10 +170,8 @@ Future<void> _handleAdd(
     return;
   }
 
-  String url = raw;
-  if (!isLocal) {
-    url = 'data:text/plain;charset=utf-8,${Uri.encodeComponent(raw)}';
-  }
+  // Always wrap in data: URI to allow parseSourceList to handle multiple links/paths
+  final url = 'data:text/plain;charset=utf-8,${Uri.encodeComponent(raw)}';
 
   await ref.read(sourcesProvider.notifier).addSource(url, label);
   if (dialogCtx.mounted) Navigator.pop(dialogCtx);
@@ -208,46 +179,6 @@ Future<void> _handleAdd(
 
 
 // ─── Tab sub-widgets ──────────────────────────────────────────────────────────
-
-
-class _FileTab extends StatelessWidget {
-  const _FileTab({required this.labelCtrl, required this.pathCtrl});
-  final TextEditingController labelCtrl;
-  final TextEditingController pathCtrl;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(children: [
-      TextField(
-          controller: labelCtrl,
-          decoration: const InputDecoration(labelText: 'Source Name')),
-      const SizedBox(height: 8),
-      TextField(
-          controller: pathCtrl,
-          enabled: false,
-          decoration: const InputDecoration(labelText: 'File Path (auto-filled)')),
-      const SizedBox(height: 16),
-      ElevatedButton.icon(
-        onPressed: () async {
-          final FilePickerResult? result =
-              await FilePicker.platform.pickFiles(
-            type: FileType.custom,
-            allowedExtensions: ['md', 'MD', 'txt'],
-          );
-          if (result != null && result.files.single.path != null) {
-            final file = File(result.files.single.path!);
-            pathCtrl.text = file.uri.toString();
-            if (labelCtrl.text.isEmpty) {
-              labelCtrl.text = result.files.single.name;
-            }
-          }
-        },
-        icon: const Icon(Icons.file_open),
-        label: const Text('Select Local File'),
-      ),
-    ]);
-  }
-}
 
 class _PasteTab extends StatelessWidget {
   const _PasteTab({required this.labelCtrl, required this.pasteCtrl});

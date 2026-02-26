@@ -279,6 +279,8 @@ class SourceItemsNotifier extends AutoDisposeFamilyAsyncNotifier<
           }
           break; // Stop the whole batch loop
         }
+        debugPrint('Failed to download ${item.name}: $e');
+        _reportFailure('${item.name}: $e');
         if (context.mounted) {
           _patch(listIndex, item.copyWith(isDownloading: false));
         }

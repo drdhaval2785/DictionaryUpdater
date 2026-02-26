@@ -162,13 +162,13 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
     showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Connection Issues'),
+        title: const Text('Processing Issues'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Could not connect to the following resources while updating:',
+              'The following resources could not be processed:',
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
             ),
             const SizedBox(height: 8),
