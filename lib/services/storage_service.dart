@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -82,5 +83,38 @@ class StorageService {
   Future<bool> dictionaryExists(String fileName, {String? sourceName}) async {
     final base = await getStorageDirectory(sourceName: sourceName);
     return File(p.join(base.path, sanitizeFileName(fileName))).exists();
+  }
+
+  /// Extracts the base part of an Indic-dict filename (part before the first '__').
+  String extractBaseName(String fileName) {
+    if (fileName.contains('__')) {
+      return fileName.split('__').first;
+    }
+    return fileName;
+  }
+
+  /// Looks for an existing file that shares the same base name but has a different
+  /// full filename (likely an older timestamped version).
+  Future<File?> findExistingVersion(String newFileName, {String? sourceName}) async {
+    final baseDir = await getStorageDirectory(sourceName: sourceName);
+    if (!await baseDir.exists()) return null;
+
+    final targetBase = extractBaseName(newFileName);
+    if (targetBase == newFileName) return null; // Not an Indic-dict timestamped file
+
+    try {
+      final List<FileSystemEntity> entities = await baseDir.list().toList();
+      for (final entity in entities) {
+        if (entity is File) {
+          final existingName = p.basename(entity.path);
+          if (existingName != newFileName && extractBaseName(existingName) == targetBase) {
+            return entity;
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Error listing storage directory: $e');
+    }
+    return null;
   }
 }

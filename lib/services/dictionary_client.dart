@@ -138,7 +138,13 @@ class DictionaryClient {
     final fileName = _storageService.sanitizeFileName(p.basename(url));
     final fileExists = await _storageService.dictionaryExists(fileName, sourceName: sourceName);
 
-    if (!fileExists) return DictionaryStatus.newFile;
+    if (!fileExists) {
+      // Check for timestamped version update
+      final existingVersion = await _storageService.findExistingVersion(fileName, sourceName: sourceName);
+      if (existingVersion != null) return DictionaryStatus.updateAvailable;
+      
+      return DictionaryStatus.newFile;
+    }
 
     // File exists — check if we have metadata
     var query = isar.dictionaryMetadatas.filter().nameEqualTo(fileName);
@@ -199,6 +205,13 @@ class DictionaryClient {
     final dir = await _storageService.getStorageDirectory(sourceName: sourceName);
     final fileName = _storageService.sanitizeFileName(p.basename(url));
     final savePath = p.join(dir.path, fileName);
+
+    // Clean up old version if it exists
+    final oldVersion = await _storageService.findExistingVersion(fileName, sourceName: sourceName);
+    if (oldVersion != null) {
+      debugPrint('Replacing old version: ${oldVersion.path} with $fileName');
+      await oldVersion.delete();
+    }
 
     try {
       await _dio.download(

@@ -19,6 +19,7 @@ class DictionaryItem {
   final DateTime? remoteLastModified;
   final DateTime? lastChecked;
   final double? sizeMb;
+  final String? replacesVersion;
 
   DictionaryItem({
     required this.url,
@@ -31,6 +32,7 @@ class DictionaryItem {
     this.remoteLastModified,
     this.lastChecked,
     this.sizeMb,
+    this.replacesVersion,
   });
 
   DictionaryItem copyWith({
@@ -133,6 +135,16 @@ class SourceItemsNotifier extends AutoDisposeFamilyAsyncNotifier<
           sizeMb = double.tryParse(m.group(1)!);
         }
 
+        // For updateAvailable, check if it's a replacement
+        String? replaces;
+        if (status == DictionaryStatus.updateAvailable) {
+          final storage = ref.read(storageServiceProvider);
+          final old = await storage.findExistingVersion(fileName, sourceName: arg.label);
+          if (old != null) {
+            replaces = p.basename(old.path);
+          }
+        }
+
         items.add(DictionaryItem(
           url: url,
           name: fileName,
@@ -143,6 +155,7 @@ class SourceItemsNotifier extends AutoDisposeFamilyAsyncNotifier<
           remoteLastModified: meta?.remoteLastModified,
           lastChecked: meta?.lastChecked,
           sizeMb: sizeMb ?? meta?.sizeMb,
+          replacesVersion: replaces,
         ));
       } catch (e) {
         debugPrint('Failed to check status for $url: $e');
@@ -660,10 +673,14 @@ class _DictionaryTile extends ConsumerWidget {
     // Status label
     final statusText = switch (item.status) {
       DictionaryStatus.newFile => 'New',
-      DictionaryStatus.updateAvailable => 'Update available',
+      DictionaryStatus.updateAvailable =>
+        item.replacesVersion != null ? 'Update (Replacement)' : 'Update available',
       DictionaryStatus.upToDate => 'Up to date',
     };
     lines.add(statusText);
+    if (item.replacesVersion != null) {
+      lines.add('Notice: Old version "${item.replacesVersion}" will be replaced.');
+    }
     // URL
     lines.add('(${item.url})');
     // Upstream last-modified

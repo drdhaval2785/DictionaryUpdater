@@ -53,16 +53,18 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                   child: Row(
                     children: [
-                      ElevatedButton.icon(
-                        icon: const Icon(Icons.add_circle_outline, size: 18),
-                        label: const Text('Add'),
-                        onPressed: () => showAddDictionaryDialog(context, ref),
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          icon: const Icon(Icons.add_circle_outline, size: 18),
+                          label: const Text('Add'),
+                          onPressed: () => showAddDictionaryDialog(context, ref),
+                        ),
                       ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: OutlinedButton.icon(
                           icon: const Icon(Icons.refresh, size: 18),
-                          label: const Text('Check Updates'),
+                          label: const Text('Refresh'),
                           onPressed: () {
                             ref.invalidate(sourcesProvider);
                             for (final s in allSources) {
