@@ -336,33 +336,37 @@ class _SourceExpansionPanelState extends ConsumerState<SourceExpansionPanel> {
         leading: Icon(Icons.source, color: theme.colorScheme.primary),
         title: Row(
           children: [
-            Expanded(
-              child: Text(widget.source.label,
-                  style: const TextStyle(fontWeight: FontWeight.bold)),
+            Flexible(
+              child: Text(
+                widget.source.label,
+                style: const TextStyle(fontWeight: FontWeight.bold),
+                overflow: TextOverflow.visible,
+              ),
             ),
             if (selectedCount > 0)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.primaryContainer,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: theme.colorScheme.primary),
-                ),
-                child: Text(
-                  '$selectedCount selected (${selectedSize.toStringAsFixed(1)} MB)',
-                  style: TextStyle(
-                      color: theme.colorScheme.onPrimaryContainer,
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold),
+              Padding(
+                padding: const EdgeInsets.only(left: 8.0),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primaryContainer,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: theme.colorScheme.primary.withAlpha(100)),
+                  ),
+                  child: Text(
+                    '$selectedCount (${selectedSize.toStringAsFixed(1)} MB)',
+                    style: TextStyle(
+                        color: theme.colorScheme.onPrimaryContainer,
+                        fontSize: 9,
+                        fontWeight: FontWeight.bold),
+                  ),
                 ),
               ),
           ],
         ),
         subtitle: Text(
           _sourceSubtitle(widget.source, totalFiles, totalSize),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(fontSize: 12),
+          style: const TextStyle(fontSize: 11),
         ),
         trailing: Row(
           mainAxisSize: MainAxisSize.min,

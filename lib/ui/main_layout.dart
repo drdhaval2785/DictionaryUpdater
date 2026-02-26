@@ -27,9 +27,6 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
 
   @override
   Widget build(BuildContext context) {
-    final double width = MediaQuery.of(context).size.width;
-    final bool isWide = width > 900;
-
     final sourcesAsync = ref.watch(sourcesProvider);
     final allSources = sourcesAsync.valueOrNull ?? [];
 
@@ -47,64 +44,35 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
         title: const Text(
           'Stardict Dictionary Updater',
           overflow: TextOverflow.ellipsis,
+          style: TextStyle(fontSize: 18),
         ),
-        actions: _selectedIndex == 0
-            ? [
-                // Minimalist Settings icon would be redundant here since Rail is on left
-              ]
-            : null,
         bottom: _selectedIndex == 0
             ? PreferredSize(
-                preferredSize: const Size.fromHeight(80),
+                preferredSize: const Size.fromHeight(60),
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                  child: Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    crossAxisAlignment: WrapCrossAlignment.center,
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                  child: Row(
                     children: [
                       ElevatedButton.icon(
                         icon: const Icon(Icons.add_circle_outline, size: 18),
-                        label: const Text('Add Dictionary'),
+                        label: const Text('Add'),
                         onPressed: () => showAddDictionaryDialog(context, ref),
                       ),
-                      Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          OutlinedButton.icon(
-                            icon: const Icon(Icons.refresh, size: 18),
-                            label: const Text('Check for Updates'),
-                            onPressed: () {
-                              ref.invalidate(sourcesProvider);
-                              for (final s in allSources) {
-                                ref.invalidate(sourceItemsProvider(s));
-                              }
-                              ref
-                                  .read(lastCheckedAllProvider.notifier)
-                                  .updateTimestamp();
-                            },
-                          ),
-                          Consumer(
-                            builder: (context, ref, child) {
-                              final lastChecked =
-                                  ref.watch(lastCheckedAllProvider);
-                              if (lastChecked == null) {
-                                return const SizedBox.shrink();
-                              }
-                              return Padding(
-                                padding: const EdgeInsets.only(top: 2, left: 4),
-                                child: Text(
-                                  'Last checked: ${_fmtDt(lastChecked)}',
-                                  style: const TextStyle(
-                                    fontSize: 9,
-                                    color: Colors.grey,
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
-                        ],
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          icon: const Icon(Icons.refresh, size: 18),
+                          label: const Text('Check Updates'),
+                          onPressed: () {
+                            ref.invalidate(sourcesProvider);
+                            for (final s in allSources) {
+                              ref.invalidate(sourceItemsProvider(s));
+                            }
+                            ref
+                                .read(lastCheckedAllProvider.notifier)
+                                .updateTimestamp();
+                          },
+                        ),
                       ),
                     ],
                   ),
@@ -112,48 +80,70 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
               )
             : null,
       ),
-      body: Row(
-        children: [
-          NavigationRail(
-            extended: isWide,
-            selectedIndex: _selectedIndex,
-            onDestinationSelected: (int index) {
-              setState(() {
-                _selectedIndex = index;
-              });
-            },
-            labelType: isWide
-                ? NavigationRailLabelType.none
-                : NavigationRailLabelType.all,
-            destinations: const [
-              NavigationRailDestination(
-                icon: Icon(Icons.sync),
-                selectedIcon: Icon(Icons.sync_alt),
-                label: Text('Sources'),
+      drawer: Drawer(
+        child: Column(
+          children: [
+            DrawerHeader(
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.primaryContainer,
               ),
-              NavigationRailDestination(
-                icon: Icon(Icons.settings),
-                selectedIcon: Icon(Icons.settings_applications),
-                label: Text('Settings'),
+              child: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.menu_book, size: 48),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Dictionary Updater',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                  ],
+                ),
               ),
-              NavigationRailDestination(
-                icon: Icon(Icons.book),
-                selectedIcon: Icon(Icons.book_online),
-                label: Text('Manual'),
-              ),
-              NavigationRailDestination(
-                icon: Icon(Icons.info),
-                selectedIcon: Icon(Icons.info_outline),
-                label: Text('About Us'),
-              ),
-            ],
-          ),
-          const VerticalDivider(thickness: 1, width: 1),
-          Expanded(
-            child: _pages[_selectedIndex],
-          ),
-        ],
+            ),
+            _buildDrawerItem(0, Icons.sync, 'Sources'),
+            _buildDrawerItem(1, Icons.settings, 'Settings'),
+            _buildDrawerItem(2, Icons.book, 'Manual'),
+            _buildDrawerItem(3, Icons.info, 'About Us'),
+            const Spacer(),
+            Consumer(
+              builder: (context, ref, child) {
+                final lastChecked = ref.watch(lastCheckedAllProvider);
+                if (lastChecked == null) return const SizedBox.shrink();
+                return Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Text(
+                    'Last checked: ${_fmtDt(lastChecked)}',
+                    style: const TextStyle(fontSize: 10, color: Colors.grey),
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
       ),
+      body: _pages[_selectedIndex],
+    );
+  }
+
+  Widget _buildDrawerItem(int index, IconData icon, String label) {
+    final isSelected = _selectedIndex == index;
+    return ListTile(
+      leading: Icon(icon, color: isSelected ? Theme.of(context).colorScheme.primary : null),
+      title: Text(
+        label,
+        style: TextStyle(
+          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+          color: isSelected ? Theme.of(context).colorScheme.primary : null,
+        ),
+      ),
+      selected: isSelected,
+      onTap: () {
+        setState(() {
+          _selectedIndex = index;
+        });
+        Navigator.pop(context); // Close drawer
+      },
     );
   }
 
