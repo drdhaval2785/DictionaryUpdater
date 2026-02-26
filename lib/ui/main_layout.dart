@@ -42,7 +42,7 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
     return Scaffold(
       appBar: AppBar(
         title: const Text(
-          'Stardict Dictionary Updater',
+          'Dictionary Updater',
           overflow: TextOverflow.ellipsis,
           style: TextStyle(fontSize: 18),
         ),

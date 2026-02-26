@@ -18,7 +18,7 @@ class AboutUsScreen extends StatelessWidget {
           ),
           const SizedBox(height: 24),
           Text(
-            'Stardict Dictionary Updater',
+            'Dictionary Updater',
             style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                   fontWeight: FontWeight.bold,
                 ),

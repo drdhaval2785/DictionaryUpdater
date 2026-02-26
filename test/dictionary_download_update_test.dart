@@ -10,7 +10,7 @@ import 'package:sdu/services/storage_service.dart';
 // Use Fake instead of Mock to avoid need for build_runner
 class FakeDio extends Fake implements Dio {
   @override
-  Future<Response> download(
+  Future<Response<dynamic>> download(
     String urlPath,
     dynamic savePath, {
     ProgressCallback? onReceiveProgress,
@@ -24,7 +24,7 @@ class FakeDio extends Fake implements Dio {
   }) async {
     final file = File(savePath.toString());
     await file.create(recursive: true);
-    return Response(requestOptions: RequestOptions(path: urlPath), statusCode: 200);
+    return Response<dynamic>(requestOptions: RequestOptions(path: urlPath), statusCode: 200);
   }
 
   @override
@@ -35,20 +35,20 @@ class FakeDio extends Fake implements Dio {
     Options? options,
     CancelToken? cancelToken,
   }) async {
-    return Response(
+    return Response<T>(
       requestOptions: RequestOptions(path: path),
       statusCode: 200,
       headers: Headers.fromMap({
         'last-modified': ['Wed, 21 Oct 2015 07:28:00 GMT'],
       }),
-    ) as Response<T>;
+    );
   }
 }
 
 class FakeIsar extends Fake implements Isar {
   @override
   Future<T> writeTxn<T>(Future<T> Function() callback, {bool silent = false}) async {
-    return await callback();
+    return callback();
   }
 
   @override
@@ -77,7 +77,6 @@ class FakeQueryBuilder<T> extends Fake {
   @override
   dynamic noSuchMethod(Invocation invocation) => this;
   
-  @override
   Future<T?> findFirst() async => null;
 }
 

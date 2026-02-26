@@ -32,19 +32,19 @@ Future<void> main() async {
         sharedPreferencesProvider.overrideWithValue(prefs),
         isarProvider.overrideWithValue(isar),
       ],
-      child: StarDictManagerApp(isFirstLaunch: !storageService.hasCustomPath),
+      child: DictionaryUpdaterApp(isFirstLaunch: !storageService.hasCustomPath),
     ),
   );
 }
 
-class StarDictManagerApp extends StatelessWidget {
+class DictionaryUpdaterApp extends StatelessWidget {
   final bool isFirstLaunch;
-  const StarDictManagerApp({super.key, required this.isFirstLaunch});
+  const DictionaryUpdaterApp({super.key, required this.isFirstLaunch});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Stardict Dictionary Updater',
+      title: 'Dictionary Updater',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
