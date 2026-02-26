@@ -4,7 +4,6 @@ import 'sync_center_screen.dart';
 import 'settings_screen.dart';
 import 'user_manual_screen.dart';
 import 'about_us_screen.dart';
-import 'support_screen.dart';
 import 'add_dictionary_dialog.dart';
 import 'source_expansion_panel.dart';
 import '../providers/providers.dart';
@@ -24,7 +23,6 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
     const SettingsScreen(),
     const UserManualScreen(),
     const AboutUsScreen(),
-    const SupportScreen(),
   ];
 
   @override
@@ -147,11 +145,6 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
                 icon: Icon(Icons.info),
                 selectedIcon: Icon(Icons.info_outline),
                 label: Text('About Us'),
-              ),
-              NavigationRailDestination(
-                icon: Icon(Icons.favorite),
-                selectedIcon: Icon(Icons.favorite_border),
-                label: Text('Support Us'),
               ),
             ],
           ),

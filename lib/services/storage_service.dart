@@ -46,18 +46,7 @@ class StorageService {
   /// - Mobile (Android/iOS): getApplicationDocumentsDirectory
   /// - Desktop (macOS, Windows, Linux): ~/Downloads/StarDictData
   Future<Directory> getDefaultStorageDirectory({String? sourceName}) async {
-    Directory base;
-    if (Platform.isAndroid || Platform.isIOS) {
-      base = await getApplicationDocumentsDirectory();
-    } else {
-      // For desktop, bypass sandbox abstractions to get the REAL Downloads folder.
-      final home = Platform.environment['HOME'] ?? Platform.environment['USERPROFILE'];
-      if (home != null) {
-        base = Directory(p.join(home, 'Downloads'));
-      } else {
-        base = await getApplicationSupportDirectory();
-      }
-    }
+    final base = await getApplicationSupportDirectory();
     
     final basePath = p.join(base.path, _folderName);
     final String fullPath = (sourceName != null && sourceName.isNotEmpty)

@@ -31,10 +31,20 @@ class AboutUsScreen extends StatelessWidget {
               color: Theme.of(context).colorScheme.primaryContainer,
               borderRadius: BorderRadius.circular(12),
             ),
-            child: const Text(
-              'Vibe coded by Dr. Dhaval Patel (drdhaval2785@gmail.com).\n\nDedicated to lexicographers across ages and places.',
-              style: TextStyle(fontSize: 16, height: 1.5),
-              textAlign: TextAlign.center,
+            child: Column(
+              children: [
+                const Text(
+                  'Vibe coded by Dr. Dhaval Patel (drdhaval2785@gmail.com).\n\nDedicated to lexicographers across ages and places.',
+                  style: TextStyle(fontSize: 16, height: 1.5),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'For any issue or feature request, please feel free to reach out to us at https://github.com/drdhaval2785/DictionaryUpdater',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                  textAlign: TextAlign.center,
+                ),
+              ],
             ),
           ),
         ],
