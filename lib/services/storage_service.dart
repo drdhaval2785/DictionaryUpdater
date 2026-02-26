@@ -86,11 +86,11 @@ class StorageService {
   }
 
   /// Extracts the base part of an Indic-dict filename (part before the first '__').
-  String extractBaseName(String fileName) {
+  String? extractBaseName(String fileName) {
     if (fileName.contains('__')) {
       return fileName.split('__').first;
     }
-    return fileName;
+    return null;
   }
 
   /// Looks for an existing file that shares the same base name but has a different
@@ -100,7 +100,7 @@ class StorageService {
     if (!await baseDir.exists()) return null;
 
     final targetBase = extractBaseName(newFileName);
-    if (targetBase == newFileName) return null; // Not an Indic-dict timestamped file
+    if (targetBase == null) return null; // Not an Indic-dict timestamped file
 
     try {
       final List<FileSystemEntity> entities = await baseDir.list().toList();
