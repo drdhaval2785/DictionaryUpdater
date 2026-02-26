@@ -6,12 +6,15 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'models/dictionary_models.dart';
 import 'providers/providers.dart';
 import 'services/dictionary_registry.dart';
+import 'services/storage_service.dart';
 import 'ui/main_layout.dart';
+import 'ui/setup_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
   final prefs = await SharedPreferences.getInstance();
+  final storageService = StorageService(prefs);
   
   final dir = await getApplicationDocumentsDirectory();
   final isar = await Isar.open(
@@ -29,18 +32,20 @@ Future<void> main() async {
         sharedPreferencesProvider.overrideWithValue(prefs),
         isarProvider.overrideWithValue(isar),
       ],
-      child: const StarDictManagerApp(),
+      child: StarDictManagerApp(isFirstLaunch: !storageService.hasCustomPath),
     ),
   );
 }
 
 class StarDictManagerApp extends StatelessWidget {
-  const StarDictManagerApp({super.key});
+  final bool isFirstLaunch;
+  const StarDictManagerApp({super.key, required this.isFirstLaunch});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Stardict Dictionary Updater',
+      debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(
@@ -55,7 +60,7 @@ class StarDictManagerApp extends StatelessWidget {
           brightness: Brightness.dark,
         ),
       ),
-      home: const MainLayout(),
+      home: isFirstLaunch ? const SetupScreen() : const MainLayout(),
     );
   }
 }

@@ -36,6 +36,8 @@ class _SyncCenterScreenState extends ConsumerState<SyncCenterScreen> {
       }
     }
 
+    final storageService = ref.watch(storageServiceProvider);
+
     return Stack(
       children: [
         sourcesAsync.when(
@@ -43,6 +45,34 @@ class _SyncCenterScreenState extends ConsumerState<SyncCenterScreen> {
               ? _buildEmptyState(context)
               : Column(
                   children: [
+                    if (!storageService.hasCustomPath)
+                      Container(
+                        width: double.infinity,
+                        color: Colors.orange.shade100,
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.warning_amber_rounded, color: Colors.orange),
+                            const SizedBox(width: 12),
+                            const Expanded(
+                              child: Text(
+                                'No storage folder selected. Please go to Settings to choose where downloads go.',
+                                style: TextStyle(color: Colors.black87, fontSize: 13, fontWeight: FontWeight.w500),
+                              ),
+                            ),
+                            TextButton(
+                              onPressed: () {
+                                // We are in MainLayout usually, so we can't easily jump to settings index here
+                                // But we can at least point them. Or we could use a global state for selected index.
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('Use the Settings tab to select a folder.')),
+                                );
+                              },
+                              child: const Text('OK'),
+                            ),
+                          ],
+                        ),
+                      ),
                     if (totalSelected > 0)
                       Container(
                         width: double.infinity,

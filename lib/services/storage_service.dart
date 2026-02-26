@@ -15,6 +15,9 @@ class StorageService {
   final SharedPreferences _prefs;
   StorageService(this._prefs);
 
+  /// Returns true if a custom storage path has been set.
+  bool get hasCustomPath => _prefs.containsKey(_storagePathKey);
+
   /// Returns the active dictionary storage directory, creating it if needed.
   Future<Directory> getStorageDirectory({String? sourceName}) async {
     final String? custom = _prefs.getString(_storagePathKey);
@@ -49,6 +52,10 @@ class StorageService {
     final base = await getApplicationSupportDirectory();
     
     final basePath = p.join(base.path, _folderName);
+    return _resolveFinalPath(basePath, sourceName);
+  }
+
+  Future<Directory> _resolveFinalPath(String basePath, String? sourceName) async {
     final String fullPath = (sourceName != null && sourceName.isNotEmpty)
         ? p.join(basePath, sanitizeFolderName(sourceName))
         : basePath;

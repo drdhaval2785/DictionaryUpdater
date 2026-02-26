@@ -23,41 +23,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Future<void> _loadCurrentPath() async {
     final storageService = ref.read(storageServiceProvider);
     final dir = await storageService.getStorageDirectory();
-    setState(() {
-      _pathController.text = dir.path;
-      _isLoading = false;
-    });
-  }
-
-  Future<void> _savePath() async {
-    final newPath = _pathController.text.trim();
-    if (newPath.isEmpty) return;
-
-    final storageService = ref.read(storageServiceProvider);
-    await storageService.setCustomStoragePath(newPath);
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Storage path updated manually')),
-      );
-    }
-  }
-
-  Future<void> _pickPath() async {
-    final result = await FilePicker.platform.getDirectoryPath();
-    if (result != null) {
-      _pathController.text = result;
-      await _savePath();
-    }
-  }
-
-  Future<void> _resetPath() async {
-    final storageService = ref.read(storageServiceProvider);
-    await storageService.resetToDefault();
-    await _loadCurrentPath();
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Storage path reset to default')),
-      );
+      setState(() {
+        _pathController.text = dir.path;
+        _isLoading = false;
+      });
     }
   }
 
@@ -67,62 +37,67 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     super.dispose();
   }
 
+  Future<void> _pickPath() async {
+    final currentPath = _pathController.text.isEmpty ? null : _pathController.text;
+    final result = await FilePicker.platform.getDirectoryPath(
+      initialDirectory: currentPath,
+    );
+    if (result != null) {
+      final storageService = ref.read(storageServiceProvider);
+      await storageService.setCustomStoragePath(result);
+      if (mounted) {
+        setState(() {
+          _pathController.text = result;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Storage path updated')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
+    final theme = Theme.of(context);
 
     return ListView(
-        padding: const EdgeInsets.all(16.0),
-        children: [
-          const Text(
-            'Storage',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+      padding: const EdgeInsets.all(16.0),
+      children: [
+        const Text(
+          'Storage',
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+        ),
+        const SizedBox(height: 16),
+        ListTile(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: BorderSide(color: theme.colorScheme.primary.withAlpha(50)),
           ),
-          const SizedBox(height: 16),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _pathController,
-                  decoration: const InputDecoration(
-                    labelText: 'Storage Path',
-                    border: OutlineInputBorder(),
-                    helperText: 'Where dictionary files will be downloaded',
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Column(
-                children: [
-                  IconButton.filledTonal(
-                    icon: const Icon(Icons.folder_open),
-                    tooltip: 'Browse',
-                    onPressed: _pickPath,
-                  ),
-                  const SizedBox(height: 8),
-                  IconButton.filled(
-                    icon: const Icon(Icons.save),
-                    tooltip: 'Save Manual Edit',
-                    onPressed: _savePath,
-                  ),
-                ],
-              ),
-            ],
+          tileColor: theme.colorScheme.primaryContainer.withAlpha(30),
+          leading: Icon(Icons.folder_open, color: theme.colorScheme.primary),
+          title: const Text('Select the Download Folder'),
+          subtitle: Text(
+            _pathController.text.isEmpty
+                ? 'No folder selected'
+                : _pathController.text,
+            style: const TextStyle(fontSize: 12),
           ),
-          const SizedBox(height: 24),
-          ListTile(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-              side: BorderSide(color: Colors.grey.withAlpha(50)),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: _pickPath,
+        ),
+        const SizedBox(height: 12),
+        if (_pathController.text.isEmpty)
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16),
+            child: Text(
+              '⚠️ Please select a folder to enable dictionary downloads.',
+              style: TextStyle(color: Colors.orange, fontSize: 12, fontWeight: FontWeight.bold),
             ),
-            leading: const Icon(Icons.restore),
-            title: const Text('Reset to Default Path'),
-            onTap: _resetPath,
           ),
-        ],
-      );
+      ],
+    );
   }
 }
