@@ -121,9 +121,9 @@ class _SyncCenterScreenState extends ConsumerState<SyncCenterScreen> {
     final storageService = ref.read(storageServiceProvider);
     final storagePath = await storageService.getStoragePathDisplay();
 
-    if (!mounted) return;
+    if (!context.mounted) return;
     final confirmed = await showDialog<bool>(
-      context: ctx,
+      context: context,
       builder: (ctx2) => AlertDialog(
         title: Text(totalSizeMb > 50 ? 'Large Download' : 'Confirm Download'),
         content: Column(

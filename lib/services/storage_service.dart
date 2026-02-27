@@ -14,7 +14,25 @@ class StorageService {
 
   /// Returns the active dictionary storage directory, creating it if needed.
   Future<Directory> getStorageDirectory({String? sourceName}) async {
-    final Directory base = _baseDirOverride ?? await getApplicationDocumentsDirectory();
+    final Directory? base;
+    if (_baseDirOverride != null) {
+      base = _baseDirOverride;
+    } else if (Platform.isMacOS || Platform.isWindows || Platform.isLinux) {
+      base = await getDownloadsDirectory();
+    } else if (Platform.isAndroid) {
+      base = await getExternalStorageDirectory();
+    } else {
+      // iOS and fallbacks
+      base = await getApplicationDocumentsDirectory();
+    }
+
+    if (base == null) {
+      // Fallback if platform-specific dir fails
+      final fallback = await getApplicationSupportDirectory();
+      final basePath = p.join(fallback.path, _folderName);
+      return _resolveFinalPath(basePath, sourceName);
+    }
+
     final basePath = p.join(base.path, _folderName);
     return _resolveFinalPath(basePath, sourceName);
   }
@@ -27,7 +45,24 @@ class StorageService {
       return 'Files App -> On My iPhone -> Dictionary Updater -> $_folderName';
     }
     
-    final base = await getApplicationDocumentsDirectory();
+    if (Platform.isMacOS) {
+      return 'Downloads Folder -> $_folderName';
+    }
+
+    final Directory? base;
+    if (Platform.isMacOS || Platform.isWindows || Platform.isLinux) {
+      base = await getDownloadsDirectory();
+    } else if (Platform.isAndroid) {
+      base = await getExternalStorageDirectory();
+    } else {
+      base = await getApplicationDocumentsDirectory();
+    }
+
+    if (base == null) {
+      final fallback = await getApplicationSupportDirectory();
+      return p.join(fallback.path, _folderName);
+    }
+
     return p.join(base.path, _folderName);
   }
 
