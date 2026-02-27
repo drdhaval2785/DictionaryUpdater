@@ -187,7 +187,7 @@ class SourceItemsNotifier extends AutoDisposeFamilyAsyncNotifier<
   }
 
   /// Download all selected items and persist metadata to Isar.
-  Future<void> downloadSelected(BuildContext context) async {
+  Future<void> downloadSelected(BuildContext context, {bool skipConfirmation = false}) async {
     final items = state.valueOrNull;
     if (items == null) return;
 
@@ -199,34 +199,36 @@ class SourceItemsNotifier extends AutoDisposeFamilyAsyncNotifier<
     final storageService = ref.read(storageServiceProvider);
     final storagePath = await storageService.getStoragePathDisplay();
 
-    if (!context.mounted) return;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(totalSizeMb > 50 ? 'Large Download' : 'Confirm Download'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('You are about to download ${totalSizeMb.toStringAsFixed(1)} MB from this source. Are you sure?'),
-            const SizedBox(height: 16),
-            const Text('Storage Location:', style: TextStyle(fontWeight: FontWeight.bold)),
-            Text(storagePath, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+    if (!skipConfirmation) {
+      if (!context.mounted) return;
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(totalSizeMb > 50 ? 'Large Download' : 'Confirm Download'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('You are about to download ${totalSizeMb.toStringAsFixed(1)} MB from this source. Are you sure?'),
+              const SizedBox(height: 16),
+              const Text('Storage Location:', style: TextStyle(fontWeight: FontWeight.bold)),
+              Text(storagePath, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Download'),
+            ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Download'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true) return;
+      );
+      if (confirmed != true) return;
+    }
 
     final client = ref.read(dictionaryClientProvider);
     final isar = ref.read(isarProvider);

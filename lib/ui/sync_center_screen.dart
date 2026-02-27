@@ -160,7 +160,7 @@ class _SyncCenterScreenState extends ConsumerState<SyncCenterScreen> {
         if (!mounted) return;
         final notifier = ref.read(sourceItemsProvider(source).notifier);
         // ignore: use_build_context_synchronously
-        await notifier.downloadSelected(ctx);
+        await notifier.downloadSelected(ctx, skipConfirmation: true);
         if (!mounted) return;
       }
     }
