@@ -25,6 +25,8 @@ class _SyncCenterScreenState extends ConsumerState<SyncCenterScreen> {
               Tab(text: 'Indic-dict Repository'),
               Tab(text: 'Customized Lists'),
             ],
+            isScrollable: true,
+            tabAlignment: TabAlignment.start,
             labelColor: Theme.of(context).colorScheme.primary,
             unselectedLabelColor: Colors.grey,
             indicatorSize: TabBarIndicatorSize.tab,

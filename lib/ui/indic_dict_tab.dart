@@ -63,7 +63,7 @@ class IndicDictTab extends ConsumerStatefulWidget {
   ConsumerState<IndicDictTab> createState() => _IndicDictTabState();
 }
 
-class _IndicDictTabState extends ConsumerState<IndicDictTab> {
+class _IndicDictTabState extends ConsumerState<IndicDictTab> with AutomaticKeepAliveClientMixin {
 
 
   bool _loadingIndex = true;
@@ -266,7 +266,18 @@ class _IndicDictTabState extends ConsumerState<IndicDictTab> {
   }
 
   @override
+  bool get wantKeepAlive => true;
+
+  @override
   Widget build(BuildContext context) {
+    super.build(context);
+
+    ref.listen(refreshTriggerProvider, (prev, next) {
+      if (next > 0) {
+        _loadIndex();
+      }
+    });
+
     if (_loadingIndex) {
       return const Center(
         child: Column(mainAxisSize: MainAxisSize.min, children: [

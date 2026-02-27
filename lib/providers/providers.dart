@@ -101,6 +101,9 @@ class LastCheckedAllNotifier extends Notifier<DateTime?> {
   }
 }
 
+/// Provider to trigger a global refresh.
+final refreshTriggerProvider = StateProvider<int>((ref) => 0);
+
 /// Provider for the Indic repository index markdown.
 final repoIndexProvider = FutureProvider<String>((ref) async {
   final dio = ref.watch(dioProvider);

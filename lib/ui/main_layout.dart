@@ -37,6 +37,16 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
           overflow: TextOverflow.ellipsis,
           style: TextStyle(fontSize: 18),
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Refresh',
+            onPressed: () {
+              ref.read(refreshTriggerProvider.notifier).state++;
+              ref.invalidate(sourcesProvider);
+            },
+          ),
+        ],
       ),
       drawer: Drawer(
         child: Column(
