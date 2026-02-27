@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../providers/providers.dart';
 
-class AboutUsScreen extends StatelessWidget {
+class AboutUsScreen extends ConsumerWidget {
   const AboutUsScreen({super.key});
 
   Future<void> _launchUrl(String urlString) async {
@@ -12,7 +14,10 @@ class AboutUsScreen extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final packageInfo = ref.watch(packageInfoProvider);
+    final version = packageInfo.version;
+
     return Padding(
       padding: const EdgeInsets.all(24.0),
       child: Column(
@@ -33,7 +38,7 @@ class AboutUsScreen extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'Version 0.1.1',
+            'Version $version',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: Theme.of(context).colorScheme.outline,
                 ),

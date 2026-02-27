@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:isar/isar.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import '../services/storage_service.dart';
 import '../services/dictionary_client.dart';
 import '../services/dictionary_registry.dart';
@@ -9,6 +10,11 @@ import '../models/dictionary_models.dart';
 
 /// Provider for SharedPreferences.
 final sharedPreferencesProvider = Provider<SharedPreferences>((ref) {
+  throw UnimplementedError(); // Initialized in main
+});
+
+/// Provider for PackageInfo.
+final packageInfoProvider = Provider<PackageInfo>((ref) {
   throw UnimplementedError(); // Initialized in main
 });
 

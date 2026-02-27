@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:isar/isar.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'models/dictionary_models.dart';
 import 'providers/providers.dart';
 import 'services/dictionary_registry.dart';
@@ -12,6 +13,7 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
   final prefs = await SharedPreferences.getInstance();
+  final packageInfo = await PackageInfo.fromPlatform();
   
   final dir = await getApplicationDocumentsDirectory();
   final isar = await Isar.open(
@@ -28,6 +30,7 @@ Future<void> main() async {
       overrides: [
         sharedPreferencesProvider.overrideWithValue(prefs),
         isarProvider.overrideWithValue(isar),
+        packageInfoProvider.overrideWithValue(packageInfo),
       ],
       child: const DictionaryUpdaterApp(),
     ),
