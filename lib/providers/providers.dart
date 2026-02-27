@@ -100,3 +100,11 @@ class LastCheckedAllNotifier extends Notifier<DateTime?> {
     state = now;
   }
 }
+
+/// Provider for the Indic repository index markdown.
+final repoIndexProvider = FutureProvider<String>((ref) async {
+  final dio = ref.watch(dioProvider);
+  const url = 'https://github.com/indic-dict/stardict-index/releases/download/current/dictionaryIndices.md';
+  final resp = await dio.get<String>(url);
+  return resp.data ?? '';
+});

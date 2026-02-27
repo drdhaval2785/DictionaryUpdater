@@ -21,7 +21,7 @@ void main() {
       expect(links.any((l) => l.endsWith('.dict')), isFalse, reason: 'Should not truncate at .dict');
     });
 
-    test('handles boundary checks with (?!\w)', () {
+    test(r'handles boundary checks with (?!\w)', () {
       // If a file ends in .dictd (and .dictd is NOT in the list), it should NOT match .dict because of (?!\w)
       const content = 'file.dictd\nfile.dict';
       final links = DictionaryClient.extractLinksForTest(content, 'https://base.com/');

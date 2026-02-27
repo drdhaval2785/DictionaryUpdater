@@ -4,7 +4,7 @@ import 'package:shimmer/shimmer.dart';
 import '../providers/providers.dart';
 import '../models/dictionary_models.dart';
 import 'source_expansion_panel.dart';
-import 'add_dictionary_dialog.dart';
+import 'indic_dict_tab.dart';
 
 class SyncCenterScreen extends ConsumerStatefulWidget {
   const SyncCenterScreen({super.key});
@@ -16,13 +16,74 @@ class SyncCenterScreen extends ConsumerStatefulWidget {
 class _SyncCenterScreenState extends ConsumerState<SyncCenterScreen> {
   @override
   Widget build(BuildContext context) {
-    final sourcesAsync = ref.watch(sourcesProvider);
+    return DefaultTabController(
+      length: 2,
+      child: Column(
+        children: [
+          TabBar(
+            tabs: const [
+              Tab(text: 'Indic-dict Repository'),
+              Tab(text: 'Customized Lists'),
+            ],
+            labelColor: Theme.of(context).colorScheme.primary,
+            unselectedLabelColor: Colors.grey,
+            indicatorSize: TabBarIndicatorSize.tab,
+          ),
+          const Expanded(
+            child: TabBarView(
+              children: [
+                IndicDictTab(),
+                CustomizedSourcesTab(),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
-    // Collect total selected across all sources for the global FAB
+class CustomizedSourcesTab extends ConsumerStatefulWidget {
+  const CustomizedSourcesTab({super.key});
+
+  @override
+  ConsumerState<CustomizedSourcesTab> createState() => _CustomizedSourcesTabState();
+}
+
+class _CustomizedSourcesTabState extends ConsumerState<CustomizedSourcesTab> {
+  final _labelCtrl = TextEditingController();
+  final _contentCtrl = TextEditingController();
+  bool _isAdding = false;
+
+  @override
+  void dispose() {
+    _labelCtrl.dispose();
+    _contentCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _addSource() async {
+    final label = _labelCtrl.text.trim();
+    final raw = _contentCtrl.text.trim();
+    if (label.isEmpty || raw.isEmpty) return;
+
+    final url = 'data:text/plain;charset=utf-8,${Uri.encodeComponent(raw)}';
+    await ref.read(sourcesProvider.notifier).addSource(url, label);
+    
+    _labelCtrl.clear();
+    _contentCtrl.clear();
+    setState(() => _isAdding = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final sourcesAsync = ref.watch(sourcesProvider);
     final allSources = sourcesAsync.valueOrNull ?? [];
+
     int totalSelected = 0;
     double totalSizeMb = 0;
     bool isAnyDownloading = false;
+
     for (final source in allSources) {
       final items = ref.watch(sourceItemsProvider(source)).valueOrNull ?? [];
       final selectedItems = items.where((i) => i.isSelected).toList();
@@ -36,43 +97,86 @@ class _SyncCenterScreenState extends ConsumerState<SyncCenterScreen> {
       }
     }
 
-
     return Stack(
       children: [
-        sourcesAsync.when(
-          data: (sources) => sources.isEmpty
-              ? _buildEmptyState(context)
-              : Column(
+        Column(
+          children: [
+            // Inline Add Source Section
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Card(
+                elevation: 0,
+                color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+                child: ExpansionTile(
+                  key: ValueKey(_isAdding),
+                  initiallyExpanded: _isAdding,
+                  onExpansionChanged: (v) => setState(() => _isAdding = v),
+                  title: const Text('Add Customized Source', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                  leading: const Icon(Icons.add_link),
                   children: [
-                    if (totalSelected > 0)
-                      Container(
-                        width: double.infinity,
-                        color: Theme.of(context).colorScheme.primaryContainer,
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 8),
-                        child: Text(
-                          'Total Selection: $totalSelected dictionaries (${totalSizeMb.toStringAsFixed(1)} MB)',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 13,
-                            color: Theme.of(context)
-                                .colorScheme
-                                .onPrimaryContainer,
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                      child: Column(
+                        children: [
+                          TextField(
+                            controller: _labelCtrl,
+                            decoration: const InputDecoration(labelText: 'Source Name', isDense: true),
                           ),
-                        ),
-                      ),
-                    Expanded(
-                      child: ListView.builder(
-                        itemCount: sources.length,
-                        padding: const EdgeInsets.only(bottom: 80),
-                        itemBuilder: (_, i) =>
-                            SourceExpansionPanel(source: sources[i]),
+                          const SizedBox(height: 8),
+                          TextField(
+                            controller: _contentCtrl,
+                            minLines: 2,
+                            maxLines: 5,
+                            decoration: const InputDecoration(
+                              labelText: 'Paste links or markdown here',
+                              isDense: true,
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          SizedBox(
+                            width: double.infinity,
+                            child: FilledButton.icon(
+                              onPressed: _addSource,
+                              icon: const Icon(Icons.add),
+                              label: const Text('Add to Lists'),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
                 ),
-          loading: () => _buildShimmer(),
-          error: (err, _) => _buildError(err.toString()),
+              ),
+            ),
+            if (totalSelected > 0)
+              Container(
+                width: double.infinity,
+                color: Theme.of(context).colorScheme.primaryContainer,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Text(
+                  'Total Selection: $totalSelected dictionaries (${totalSizeMb.toStringAsFixed(1)} MB)',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                    color: Theme.of(context).colorScheme.onPrimaryContainer,
+                  ),
+                ),
+              ),
+            Expanded(
+              child: sourcesAsync.when(
+                data: (sources) => sources.isEmpty
+                    ? _buildEmptyState()
+                    : ListView.builder(
+                        itemCount: sources.length,
+                        padding: const EdgeInsets.only(bottom: 80),
+                        itemBuilder: (_, i) => SourceExpansionPanel(source: sources[i]),
+                      ),
+                loading: () => _buildShimmer(),
+                error: (err, _) => Center(child: Text(err.toString())),
+              ),
+            ),
+          ],
         ),
         if (totalSelected > 0 || isAnyDownloading)
           Positioned(
@@ -83,7 +187,6 @@ class _SyncCenterScreenState extends ConsumerState<SyncCenterScreen> {
               children: [
                 if (isAnyDownloading)
                   FloatingActionButton.extended(
-                    heroTag: 'global_stop',
                     onPressed: () {
                       for (final source in allSources) {
                         ref.read(sourceItemsProvider(source).notifier).cancelDownloads();
@@ -96,12 +199,9 @@ class _SyncCenterScreenState extends ConsumerState<SyncCenterScreen> {
                   ),
                 if (totalSelected > 0 && !isAnyDownloading)
                   FloatingActionButton.extended(
-                    heroTag: 'global_download',
                     icon: const Icon(Icons.download_rounded),
-                    label: Text(totalSizeMb > 0
-                        ? 'Download $totalSelected (${totalSizeMb.toStringAsFixed(1)} MB)'
-                        : 'Download $totalSelected'),
-                    onPressed: () => _downloadAll(context, allSources, totalSizeMb),
+                    label: Text('Download $totalSelected (${totalSizeMb.toStringAsFixed(1)} MB)'),
+                    onPressed: () => _downloadAll(allSources, totalSizeMb),
                   ),
               ],
             ),
@@ -110,80 +210,51 @@ class _SyncCenterScreenState extends ConsumerState<SyncCenterScreen> {
     );
   }
 
-  // ─── Global download ────────────────────────────────────────────────────────
-
-  Future<void> _downloadAll(BuildContext context,
-      List<DictionarySource> sources, double totalSizeMb) async {
-    // capture early to avoid analyzer complaint about using `context` after
-    // awaits (even though we check `mounted` later).
-    final ctx = context;
-
+  Future<void> _downloadAll(List<DictionarySource> sources, double totalSizeMb) async {
     final storageService = ref.read(storageServiceProvider);
     final storagePath = await storageService.getStoragePathDisplay();
 
-    if (!context.mounted) return;
+    if (!mounted) return;
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (ctx2) => AlertDialog(
-        title: Text(totalSizeMb > 50 ? 'Large Download' : 'Confirm Download'),
+      builder: (ctx) => AlertDialog(
+        title: const Text('Confirm Download'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('You are about to download ${totalSizeMb.toStringAsFixed(1)} MB of data. Are you sure?'),
+            Text('Are you sure you want to download ${totalSizeMb.toStringAsFixed(1)} MB?'),
             const SizedBox(height: 16),
             const Text('Storage Location:', style: TextStyle(fontWeight: FontWeight.bold)),
             Text(storagePath, style: const TextStyle(fontSize: 12, color: Colors.grey)),
           ],
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx2, false),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx2, true),
-            child: const Text('Download'),
-          ),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Download')),
         ],
       ),
     );
-    if (confirmed != true || !ctx.mounted) return;
 
-    for (final DictionarySource source in sources) {
-      if (!mounted) return;
+    if (confirmed != true || !mounted) return;
 
-      final items = ref.read(sourceItemsProvider(source)).valueOrNull ?? [];
-      final hasSelected = items.any((i) => i.isSelected);
-
-      if (hasSelected) {
-        if (!mounted) return;
-        final notifier = ref.read(sourceItemsProvider(source).notifier);
-        // ignore: use_build_context_synchronously
-        await notifier.downloadSelected(ctx, skipConfirmation: true);
-        if (!mounted) return;
-      }
+    for (final source in sources) {
+      if (!mounted) break;
+      final notifier = ref.read(sourceItemsProvider(source).notifier);
+      await notifier.downloadSelected(context, skipConfirmation: true);
     }
   }
 
-  // ─── Empty state ─────────────────────────────────────────────────────────────
-
-  Widget _buildEmptyState(BuildContext context) {
-    return Center(
+  Widget _buildEmptyState() {
+    return const Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.library_books_outlined, size: 64, color: Colors.grey),
-          const SizedBox(height: 16),
-          const Text('Add Dictionaries by clicking Add Dictionary symbol above',
-              style: TextStyle(color: Colors.grey, fontSize: 13),
-              textAlign: TextAlign.center),
-          const SizedBox(height: 24),
-          ElevatedButton.icon(
-            onPressed: () => showAddDictionaryDialog(context, ref),
-            icon: const Icon(Icons.add),
-            label: const Text('Add Dictionary'),
-          ),
+          Icon(Icons.library_books_outlined, size: 64, color: Colors.grey),
+          SizedBox(height: 16),
+          Text('No customized lists yet.\nPaste links above to add your own.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.grey, fontSize: 13)),
         ],
       ),
     );
@@ -195,31 +266,13 @@ class _SyncCenterScreenState extends ConsumerState<SyncCenterScreen> {
       itemBuilder: (context, index) => Shimmer.fromColors(
         baseColor: Colors.grey[300]!,
         highlightColor: Colors.grey[100]!,
-        child: Card(
-          margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          child: ListTile(
-            leading: Container(width: 40, height: 40, color: Colors.white),
-            title: Container(height: 16, color: Colors.white),
-            subtitle: Container(width: 200, height: 12, color: Colors.white),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildError(String err) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.error_outline, size: 48, color: Colors.red),
-            const SizedBox(height: 12),
-            Text(err, textAlign: TextAlign.center),
-          ],
+        child: ListTile(
+          leading: Container(width: 40, height: 40, color: Colors.white),
+          title: Container(height: 16, color: Colors.white),
+          subtitle: Container(width: 200, height: 12, color: Colors.white),
         ),
       ),
     );
   }
 }
+

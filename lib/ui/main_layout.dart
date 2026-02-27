@@ -3,8 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'sync_center_screen.dart';
 import 'user_manual_screen.dart';
 import 'about_us_screen.dart';
-import 'add_dictionary_dialog.dart';
-import 'source_expansion_panel.dart';
 import '../providers/providers.dart';
 
 class MainLayout extends ConsumerStatefulWidget {
@@ -25,8 +23,6 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
 
   @override
   Widget build(BuildContext context) {
-    final sourcesAsync = ref.watch(sourcesProvider);
-    final allSources = sourcesAsync.valueOrNull ?? [];
 
     ref.listen<List<String>>(failedResourcesProvider, (prev, next) {
       if (next.isNotEmpty) {
@@ -41,41 +37,6 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
           overflow: TextOverflow.ellipsis,
           style: TextStyle(fontSize: 18),
         ),
-        bottom: _selectedIndex == 0
-            ? PreferredSize(
-                preferredSize: const Size.fromHeight(60),
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          icon: const Icon(Icons.add_circle_outline, size: 18),
-                          label: const Text('Add'),
-                          onPressed: () => showAddDictionaryDialog(context, ref),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          icon: const Icon(Icons.refresh, size: 18),
-                          label: const Text('Refresh'),
-                          onPressed: () {
-                            ref.invalidate(sourcesProvider);
-                            for (final s in allSources) {
-                              ref.invalidate(sourceItemsProvider(s));
-                            }
-                            ref
-                                .read(lastCheckedAllProvider.notifier)
-                                .updateTimestamp();
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              )
-            : null,
       ),
       drawer: Drawer(
         child: Column(
