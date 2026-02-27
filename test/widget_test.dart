@@ -20,7 +20,7 @@ void main() {
           // We don't override isarProvider yet as it might require a real/mock instance
           // but we'll see if the initial build passes without it or with a late override.
         ],
-        child: const DictionaryUpdaterApp(isFirstLaunch: false),
+        child: const DictionaryUpdaterApp(),
       ),
     );
 

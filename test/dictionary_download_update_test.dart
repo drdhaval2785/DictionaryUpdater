@@ -3,7 +3,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:dio/dio.dart';
 import 'package:isar/isar.dart';
 import 'package:path/path.dart' as p;
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sdu/services/dictionary_client.dart';
 import 'package:sdu/services/storage_service.dart';
 
@@ -91,11 +90,7 @@ void main() {
 
   setUp(() async {
     tempDir = await Directory.systemTemp.createTemp('sdu_download_test');
-    SharedPreferences.setMockInitialValues({
-      'custom_storage_path': tempDir.path,
-    });
-    final prefs = await SharedPreferences.getInstance();
-    storageService = StorageService(prefs);
+    storageService = StorageService(baseDirOverride: tempDir);
     fakeDio = FakeDio();
     fakeIsar = FakeIsar();
     client = DictionaryClient(fakeDio, storageService);
@@ -112,8 +107,9 @@ void main() {
     const newName = 'abhidhAnachintAmaNi__2024-02-26.tar.gz';
     const url = 'https://example.com/$newName';
     
-    final oldFile = File(p.join(tempDir.path, oldName));
-    await oldFile.create();
+    final storageDir = p.join(tempDir.path, 'DictionaryData');
+    final oldFile = File(p.join(storageDir, oldName));
+    await oldFile.create(recursive: true);
 
     expect(await oldFile.exists(), isTrue, reason: 'Old file should exist before download');
 
@@ -123,7 +119,7 @@ void main() {
     // VERIFY: The old file should have been deleted by DictionaryClient.downloadDictionary
     expect(await oldFile.exists(), isFalse, reason: 'The old timestamped version should be deleted');
     
-    final newFile = File(p.join(tempDir.path, newName));
+    final newFile = File(p.join(storageDir, newName));
     expect(await newFile.exists(), isTrue, reason: 'New version should be present');
   });
 }

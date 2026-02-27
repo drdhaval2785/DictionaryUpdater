@@ -6,15 +6,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'models/dictionary_models.dart';
 import 'providers/providers.dart';
 import 'services/dictionary_registry.dart';
-import 'services/storage_service.dart';
 import 'ui/main_layout.dart';
-import 'ui/setup_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
   final prefs = await SharedPreferences.getInstance();
-  final storageService = StorageService(prefs);
   
   final dir = await getApplicationDocumentsDirectory();
   final isar = await Isar.open(
@@ -32,14 +29,13 @@ Future<void> main() async {
         sharedPreferencesProvider.overrideWithValue(prefs),
         isarProvider.overrideWithValue(isar),
       ],
-      child: DictionaryUpdaterApp(isFirstLaunch: !storageService.hasCustomPath),
+      child: const DictionaryUpdaterApp(),
     ),
   );
 }
 
 class DictionaryUpdaterApp extends StatelessWidget {
-  final bool isFirstLaunch;
-  const DictionaryUpdaterApp({super.key, required this.isFirstLaunch});
+  const DictionaryUpdaterApp({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -60,7 +56,7 @@ class DictionaryUpdaterApp extends StatelessWidget {
           brightness: Brightness.dark,
         ),
       ),
-      home: isFirstLaunch ? const SetupScreen() : const MainLayout(),
+      home: const MainLayout(),
     );
   }
 }

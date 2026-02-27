@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'sync_center_screen.dart';
-import 'settings_screen.dart';
 import 'user_manual_screen.dart';
 import 'about_us_screen.dart';
 import 'add_dictionary_dialog.dart';
@@ -20,7 +19,6 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
 
   final List<Widget> _pages = [
     const SyncCenterScreen(),
-    const SettingsScreen(),
     const UserManualScreen(),
     const AboutUsScreen(),
   ];
@@ -30,9 +28,6 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
     final sourcesAsync = ref.watch(sourcesProvider);
     final allSources = sourcesAsync.valueOrNull ?? [];
 
-    // listen needs an explicit type argument so that `next` is treated as
-    // `List<String>` rather than `Object?` (which was causing the earlier
-    // "getter 'isNotEmpty' isn't defined for Object?" error).
     ref.listen<List<String>>(failedResourcesProvider, (prev, next) {
       if (next.isNotEmpty) {
         _showFailureDialog(context, ref, next);
@@ -104,9 +99,8 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
               ),
             ),
             _buildDrawerItem(0, Icons.sync, 'Sources'),
-            _buildDrawerItem(1, Icons.settings, 'Settings'),
-            _buildDrawerItem(2, Icons.book, 'Manual'),
-            _buildDrawerItem(3, Icons.info, 'About Us'),
+            _buildDrawerItem(1, Icons.book, 'Manual'),
+            _buildDrawerItem(2, Icons.info, 'About Us'),
             const Spacer(),
             Consumer(
               builder: (context, ref, child) {

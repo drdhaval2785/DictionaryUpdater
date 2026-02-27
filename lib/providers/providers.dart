@@ -19,8 +19,7 @@ final isarProvider = Provider<Isar>((ref) {
 
 /// Provider for StorageService.
 final storageServiceProvider = Provider<StorageService>((ref) {
-  final prefs = ref.watch(sharedPreferencesProvider);
-  return StorageService(prefs);
+  return StorageService();
 });
 
 /// Provider for Dio instance.
