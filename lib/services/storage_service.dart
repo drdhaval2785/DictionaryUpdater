@@ -19,6 +19,18 @@ class StorageService {
     return _resolveFinalPath(basePath, sourceName);
   }
 
+  /// Returns a user-friendly string describing the storage location.
+  Future<String> getStoragePathDisplay() async {
+    if (_baseDirOverride != null) return p.join(_baseDirOverride.path, _folderName);
+
+    if (Platform.isIOS) {
+      return 'Files App -> On My iPhone -> Dictionary Updater -> $_folderName';
+    }
+    
+    final base = await getApplicationDocumentsDirectory();
+    return p.join(base.path, _folderName);
+  }
+
   Future<Directory> _resolveFinalPath(String basePath, String? sourceName) async {
     final String fullPath = (sourceName != null && sourceName.isNotEmpty)
         ? p.join(basePath, sanitizeFolderName(sourceName))

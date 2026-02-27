@@ -196,27 +196,37 @@ class SourceItemsNotifier extends AutoDisposeFamilyAsyncNotifier<
     if (selected.isEmpty) return;
 
     final totalSizeMb = selected.fold<double>(0, (sum, e) => sum + (e.value.sizeMb ?? 0));
-    if (totalSizeMb > 50) {
-      final confirmed = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('Large Download'),
-          content: Text(
-              'You are about to download ${totalSizeMb.toStringAsFixed(1)} MB from this source. Are you sure?'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Download'),
-            ),
+    final storageService = ref.read(storageServiceProvider);
+    final storagePath = await storageService.getStoragePathDisplay();
+
+    if (!context.mounted) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(totalSizeMb > 50 ? 'Large Download' : 'Confirm Download'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('You are about to download ${totalSizeMb.toStringAsFixed(1)} MB from this source. Are you sure?'),
+            const SizedBox(height: 16),
+            const Text('Storage Location:', style: TextStyle(fontWeight: FontWeight.bold)),
+            Text(storagePath, style: const TextStyle(fontSize: 12, color: Colors.grey)),
           ],
         ),
-      );
-      if (confirmed != true) return;
-    }
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Download'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
 
     final client = ref.read(dictionaryClientProvider);
     final isar = ref.read(isarProvider);

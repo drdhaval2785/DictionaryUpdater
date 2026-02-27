@@ -118,27 +118,37 @@ class _SyncCenterScreenState extends ConsumerState<SyncCenterScreen> {
     // awaits (even though we check `mounted` later).
     final ctx = context;
 
-    if (totalSizeMb > 50) {
-      final confirmed = await showDialog<bool>(
-        context: ctx,
-        builder: (ctx2) => AlertDialog(
-          title: const Text('Large Download'),
-          content: Text(
-              'You are about to download ${totalSizeMb.toStringAsFixed(1)} MB of data. Are you sure?'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx2, false),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(ctx2, true),
-              child: const Text('Download'),
-            ),
+    final storageService = ref.read(storageServiceProvider);
+    final storagePath = await storageService.getStoragePathDisplay();
+
+    if (!mounted) return;
+    final confirmed = await showDialog<bool>(
+      context: ctx,
+      builder: (ctx2) => AlertDialog(
+        title: Text(totalSizeMb > 50 ? 'Large Download' : 'Confirm Download'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('You are about to download ${totalSizeMb.toStringAsFixed(1)} MB of data. Are you sure?'),
+            const SizedBox(height: 16),
+            const Text('Storage Location:', style: TextStyle(fontWeight: FontWeight.bold)),
+            Text(storagePath, style: const TextStyle(fontSize: 12, color: Colors.grey)),
           ],
         ),
-      );
-      if (confirmed != true) return;
-    }
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx2, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx2, true),
+            child: const Text('Download'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !ctx.mounted) return;
 
     for (final DictionarySource source in sources) {
       if (!mounted) return;
