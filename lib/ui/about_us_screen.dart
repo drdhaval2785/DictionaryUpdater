@@ -34,7 +34,7 @@ class AboutUsScreen extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'Version 0.1.0',
+            'Version 0.1.1',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: Theme.of(context).colorScheme.outline,
                 ),

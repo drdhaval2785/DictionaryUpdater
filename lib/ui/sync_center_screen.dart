@@ -22,8 +22,8 @@ class _SyncCenterScreenState extends ConsumerState<SyncCenterScreen> {
         children: [
           TabBar(
             tabs: const [
-              Tab(text: 'Indic-dict Repository'),
-              Tab(text: 'Customized Lists'),
+              Tab(text: 'Indic-dict'),
+              Tab(text: 'Your lists'),
             ],
             isScrollable: true,
             tabAlignment: TabAlignment.start,

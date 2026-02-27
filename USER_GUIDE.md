@@ -1,42 +1,67 @@
 # Dictionary Updater User Guide
 
-A production-ready, cross-platform dictionary manager built with Flutter.
+A powerful, cross-platform utility designed for scholarly dictionary management. Effortlessly browse, download, and synchronize hundreds of dictionaries from the **Indic-dict** repository or your own custom lists.
 
-## Features
-- **Indic-dict Repository**: Browse and download hundreds of scholarly dictionaries directly from the repository.
-- **Customized Lists**: Paste direct links or markdown lists to track your own dictionary sources.
-- **Smart Versioning**: Automatically identifies updates based on filenames and timestamps.
-- **Unified Sync Center**: Manage all your dictionaries from a single, tabbed interface.
-- **Cross-Platform Storage**: Dictionaries are automatically stored in the best location for your device.
+---
 
-## Storage Locations
-To simplify your experience, the app automatically chooses a secure and accessible storage location.
+## 🚀 Core Features
+- **Unified Sync Center**: A centralized dashboard for all dictionary management.
+- **Official Repository Integration**: Direct access to the comprehensive Indic-dict collection.
+- **Custom Source Tracking**: Monitor and update dictionaries from any web link or markdown list.
+- **Automated Version Tracking**: Intelligent update detection based on file timestamps.
+- **Cross-Platform Storage**: Native file management for macOS, Windows, Linux, iOS, and Android.
 
-- **macOS / Windows / Linux**: Saved to your system **Downloads** folder (`Downloads/DictionaryData`).
-- **iOS**: Accessible through the system **Files** app under **"On My iPhone > Dictionary Updater"**.
-- **Android**: Stored in external storage under `Android/data/com.example.sdu/files/DictionaryData`.
+---
 
-## Managing Dictionaries
-Open the **Sync Center** from the sidebar drawer to manage your sources.
+## 📂 Storage & File Access
+The app automatically selects the optimal storage location for your platform, ensuring files are both secure and accessible to other dictionary readers (like Goldendict or ColorDict).
 
-### Indic-dict Repository Tab
-1. Browse the scholarly dictionary categories.
-2. Select the items you wish to download. Multiple selections across different groups are supported.
-3. Click the **Download** button at the bottom.
-4. The list is automatically kept in state when you switch tabs, but you can manually refresh it using the **Refresh** icon in the header.
+| Platform | Recommended Location | Access Method |
+| :--- | :--- | :--- |
+| **macOS / Windows / Linux** | `Downloads/DictionaryData` | Standard File Explorer / Finder |
+| **iOS** | App Sandbox | System **Files** app > "On My iPhone" > "Dictionary Updater" |
+| **Android** | External App Data | `Android/data/com.example.sdu/files/DictionaryData` |
 
-### Customized Lists Tab
-1. Expand the **"Add Customized Source"** section.
-2. Provide a name and paste a direct URL or a block of markdown text containing dictionary links.
-3. Dictionaries found in the text will appear for tracking and download.
-4. Click the floating **Download** button to start processing your selections.
+---
 
-## Smart Updates & Refresh
-- **Refresh**: Click the **Refresh icon** in the top AppBar to check both repository and customized sources for newer versions.
-- **Detection**: The app identifies "Update Available" when the upstream filename has a newer timestamp than your local version.
-- **Auto-Selection**: New dictionaries and updates are automatically pre-selected for your convenience.
+## 🛠 Managing Your Dictionaries
 
-## Sync Center Controls
-- **Global Actions**: Use the floating actions to "Download All" or "Stop All" active downloads.
-- **Direct Downloads**: Individual items in the Indic-dict tab show a progress bar during download.
-- **Clear List**: You can delete customized sources by clicking the delete icon on their respective cards.
+Navigation is handled via the **Sync Center**, accessible from the side drawer. The interface is split into two primary tabs:
+
+### 1. Indic-dict (Official Repository)
+This tab connects you directly to hundreds of scholarly dictionaries.
+- **Browsing**: Explore dictionaries organized by language and category.
+- **Multi-Selection**: Check individual items or use the group headers to select entire categories at once.
+- **Direct Download**: Use the **Download** button at the bottom to fetch all selected items.
+- **State Preservation**: You can switch to other tabs or browse different groups without losing your current selection.
+- **Refresh**: Use the **Refresh** icon in the top AppBar to check for new additions to the repository.
+
+### 2. Your lists (Customized Sources)
+Track and update dictionaries from private repositories or custom web sources.
+- **Adding Sources**: Expand the **"Add Customized Source"** section. Give your source a name and paste either a direct download URL or a block of markdown text containing links.
+- **Automatic Parsing**: The app will scan your pasted text for all valid dictionary links and present them as a trackable list.
+- **Management**: Each source can be expanded to view individual files or deleted entirely using the trash icon.
+- **Bulk Sync**: Use the floating action button to download all updates across all your custom lists simultaneously.
+
+---
+
+## 🔄 Smart Updates & Syncing
+- **Update Detection**: The app identifies "Update Available" when a file on the server has a newer timestamp than your local copy.
+- **Auto-Selection**: New dictionaries and identified updates are automatically highlighted and pre-selected for one-tap downloading.
+- **Global Refresh**: Click the **Refresh** icon in the top AppBar to perform a comprehensive check of all repository and custom sources.
+- **Active Monitoring**: Real-time progress bars show individual download status, and a "Stop All" action is available for emergency cancellations.
+
+---
+
+## ❓ Frequently Asked Questions
+**Q: Why don't my changes appear after I switch tabs?**
+
+**A:** The app uses caching to ensure a fast, responsive experience. If you expect new dictionaries to be available, use the **Refresh** button in the AppBar.
+
+**Q: Can I change the storage folder?**
+
+**A:** Currently, the app uses standardized paths to ensure compatibility with system-wide file access policies and other dictionary apps.
+
+**Q: What file formats are supported?**
+
+**A:** The app primarily manages compressed dictionary archives (e.g., `.tar.gz`, `.zip`, `.dz`). These are compatible with most modern StarDict, Dictd, Mdict and Slob-based dictionary readers.
