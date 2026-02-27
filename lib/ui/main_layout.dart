@@ -59,7 +59,10 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(Icons.menu_book, size: 48),
+                    Image.asset(
+                      'assets/dict_up.png',
+                      height: 64,
+                    ),
                     const SizedBox(height: 8),
                     Text(
                       'Dictionary Updater',

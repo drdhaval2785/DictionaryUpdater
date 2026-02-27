@@ -19,10 +19,9 @@ class AboutUsScreen extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Text(
-            '🙏',
-            style: TextStyle(fontSize: 80),
-            textAlign: TextAlign.center,
+          Image.asset(
+            'assets/dict_up.png',
+            height: 120,
           ),
           const SizedBox(height: 24),
           Text(
