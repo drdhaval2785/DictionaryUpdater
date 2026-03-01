@@ -43,6 +43,7 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
             tooltip: 'Refresh',
             onPressed: () {
               ref.read(refreshTriggerProvider.notifier).state++;
+              ref.read(lastCheckedAllProvider.notifier).updateTimestamp();
               ref.invalidate(sourcesProvider);
             },
           ),

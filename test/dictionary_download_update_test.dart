@@ -76,7 +76,6 @@ class FakeQueryBuilder<T, R, S> extends Fake implements QueryBuilder<T, R, S> {
   @override
   dynamic noSuchMethod(Invocation invocation) => this;
   
-  @override
   Future<R?> findFirst() async => null;
 }
 

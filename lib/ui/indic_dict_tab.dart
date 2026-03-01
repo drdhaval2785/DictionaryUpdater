@@ -68,7 +68,7 @@ class _IndicDictTabState extends ConsumerState<IndicDictTab> with AutomaticKeepA
 
   bool _loadingIndex = true;
   String? _indexError;
-  final List<_TarsSource> _sources = [];
+  List<_TarsSource> _sources = [];
   final List<String> _failedResources = [];
   final Set<String> _rootFiles = {}; // Files in the root DictionaryData folder
   CancelToken? _downloadCancelToken;
@@ -116,6 +116,7 @@ class _IndicDictTabState extends ConsumerState<IndicDictTab> with AutomaticKeepA
         });
       }
       await _fetchAll(sources);
+      await ref.read(lastCheckedAllProvider.notifier).updateTimestamp();
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -361,7 +362,7 @@ class _IndicDictTabState extends ConsumerState<IndicDictTab> with AutomaticKeepA
     final selectedCount = _selectedDicts.length;
     final totalSizeMb = _selectedDicts.fold<double>(0.0, (sum, e) => sum + e.sizeMb);
 
-    final isDownloading = _sources.expand((s) => s.entries ?? []).any((e) => e.isDownloading);
+    final isDownloading = _sources.expand<_DictEntry>((s) => s.entries ?? <_DictEntry>[]).any((e) => e.isDownloading);
 
     return Column(children: [
       if (!_allFetched) LinearProgressIndicator(value: _totalCount == 0 ? null : _fetchedCount / _totalCount),
