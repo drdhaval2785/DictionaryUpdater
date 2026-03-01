@@ -21,6 +21,7 @@ class _SyncCenterScreenState extends ConsumerState<SyncCenterScreen> {
       length: 2,
       child: Column(
         children: [
+          _buildRefreshHeader(context, ref),
           TabBar(
             tabs: const [
               Tab(text: 'Indic-dict'),
@@ -43,6 +44,68 @@ class _SyncCenterScreenState extends ConsumerState<SyncCenterScreen> {
         ],
       ),
     );
+  }
+
+  Widget _buildRefreshHeader(BuildContext context, WidgetRef ref) {
+    final lastChecked = ref.watch(lastCheckedAllProvider);
+    final theme = Theme.of(context);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.primaryContainer.withValues(alpha: 0.2),
+        border: Border(
+          bottom: BorderSide(color: theme.colorScheme.outlineVariant, width: 0.5),
+        ),
+      ),
+      child: Column(
+        children: [
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: () {
+                ref.read(refreshTriggerProvider.notifier).state++;
+                ref.read(lastCheckedAllProvider.notifier).updateTimestamp();
+                ref.invalidate(sourcesProvider);
+              },
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Refresh Dictionaries', style: TextStyle(fontWeight: FontWeight.bold)),
+              style: FilledButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+          ),
+          if (lastChecked != null) ...[
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.history, size: 14, color: theme.colorScheme.onSurfaceVariant),
+                const SizedBox(width: 4),
+                Text(
+                  'Last checked: ${_fmtDt(lastChecked)}',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  String _fmtDt(DateTime dt) {
+    final local = dt.toLocal();
+    return '${local.year}-'
+        '${local.month.toString().padLeft(2, '0')}-'
+        '${local.day.toString().padLeft(2, '0')} '
+        '${local.hour.toString().padLeft(2, '0')}:'
+        '${local.minute.toString().padLeft(2, '0')}';
   }
 }
 

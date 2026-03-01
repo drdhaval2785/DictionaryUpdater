@@ -31,32 +31,37 @@ Navigation is handled via the **Sync Center**, accessible from the side drawer. 
 ### 1. Indic-dict (Official Repository)
 This tab connects you directly to hundreds of scholarly dictionaries.
 - **Browsing**: Explore dictionaries organized by language and category.
-- **Multi-Selection**: Check individual items or use the group headers to select entire categories at once.
+- **Multi-Selection**: Check individual items or use group headers to select entire categories at once.
 - **Direct Download**: Use the **Download** button at the bottom to fetch all selected items.
-- **State Preservation**: You can switch to other tabs or browse different groups without losing your current selection.
-- **Refresh**: Use the **Refresh** icon in the top AppBar to check for new additions to the repository.
+- **State Preservation**: Switch tabs or browse different groups without losing your selection.
 
 ### 2. Your lists (Customized Sources)
 Track and update dictionaries from private repositories or custom web sources.
-- **Adding Sources**: Expand the **"Add Customized Source"** section. Give your source a name and paste either a direct download URL or a block of markdown text containing links.
-- **Automatic Parsing**: The app will scan your pasted text for all valid dictionary links and present them as a trackable list.
-- **Management**: Each source can be expanded to view individual files or deleted entirely using the trash icon.
-- **Bulk Sync**: Use the floating action button to download all updates across all your custom lists simultaneously.
+- **Adding Sources**: Expand **"Add Customized Source"**, give it a name, and paste a direct URL or a block of markdown text.
+- **Automatic Parsing**: The app scans pasted text for dictionary links and presents them as a trackable list.
+- **Management**: Expand sources to view files or delete them using the trash icon.
 
 ---
 
 ## 🔄 Smart Updates & Syncing
-- **Update Detection**: The app identifies "Update Available" when a file on the server has a newer timestamp than your local copy.
-- **Auto-Selection**: New dictionaries and identified updates are automatically highlighted and pre-selected for one-tap downloading.
-- **Global Refresh**: Click the **Refresh** icon in the top AppBar to perform a comprehensive check of all repository and custom sources.
-- **Active Monitoring**: Real-time progress bars show individual download status, and a "Stop All" action is available for emergency cancellations.
+
+- **Prominent Refresh**: The core of the app is the large **"Refresh Dictionaries"** button at the top of the Sync Center. Click it to perform a comprehensive check of all repository and custom sources.
+- **Last Checked Timestamp**: Directly below the Refresh button, you'll see exactly when your collection was last updated.
+- **Summary Statistics**: Every tab features a status header showing:
+    - **Total Available**: All dictionaries found in the source.
+    - **Downloaded**: Items already on your device (Up to date + Newer version available).
+    - **Up to date**: Files that match the latest server version.
+    - **Newer version**: Files that have an update available.
+- **Update Detection**: The app identifies updates by comparing the **timestamp** embedded in the filename (e.g., `...__2023-12-01...`) with your local copy.
+- **Batch Progress**: During downloads, a persistent progress bar shows the overall batch status (e.g., "5/12 downloaded").
+- **Integrated Stop All**: A prominent **"Stop All"** button appears during active downloads for immediate cancellation.
 
 ---
 
 ## ❓ Frequently Asked Questions
 **Q: Why don't my changes appear after I switch tabs?**
 
-**A:** The app uses caching to ensure a fast, responsive experience. If you expect new dictionaries to be available, use the **Refresh** button in the AppBar.
+**A:** The app uses caching for responsiveness. If you expect new dictionaries to be available, use the prominent **Refresh Dictionaries** button.
 
 **Q: Can I change the storage folder?**
 
