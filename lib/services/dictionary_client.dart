@@ -126,16 +126,39 @@ class DictionaryClient {
   /// Returns the update status for a dictionary file.
   Future<DictionaryStatus> getDictionaryStatus(String url, Isar isar, {String? sourceName}) async {
     final fileName = _storageService.sanitizeFileName(p.basename(url));
+    final upstreamTimestamp = _storageService.extractTimestamp(fileName);
+
     final fileExists = await _storageService.dictionaryExists(fileName, sourceName: sourceName);
 
     if (!fileExists) {
       // Check for timestamped version update
       final existingVersion = await _storageService.findExistingVersion(fileName, sourceName: sourceName);
-      if (existingVersion != null) return DictionaryStatus.updateAvailable;
+      if (existingVersion != null) {
+        final localTimestamp = _storageService.extractTimestamp(p.basename(existingVersion.path));
+        
+        // If we have both timestamps, compare them.
+        if (upstreamTimestamp != null && localTimestamp != null) {
+          if (upstreamTimestamp.isAfter(localTimestamp)) {
+            return DictionaryStatus.updateAvailable;
+          } else {
+            return DictionaryStatus.upToDate;
+          }
+        }
+        
+        // Fallback for files without timestamps in filenames
+        return DictionaryStatus.updateAvailable;
+      }
       
       return DictionaryStatus.newFile;
     }
 
+    // File exists exactly — if it has a timestamp, it's definitely up to date
+    // because any change in content would result in a different filename (different timestamp).
+    if (upstreamTimestamp != null) {
+      return DictionaryStatus.upToDate;
+    }
+
+    // Fallback logic for non-timestamped filenames (e.g. static names)
     // File exists — check if we have metadata
     var query = isar.dictionaryMetadatas.filter().nameEqualTo(fileName);
     if (sourceName != null && sourceName.isNotEmpty) {
@@ -228,17 +251,20 @@ class DictionaryClient {
       final sizeMb = sizeInBytes / (1024 * 1024);
 
       // Persist metadata so next launch detects this file as up-to-date.
+      final filenameTimestamp = _storageService.extractTimestamp(fileName);
       DateTime? remoteModified;
-      try {
-        remoteModified = await checkRemoteVersion(url);
-      } catch (_) {}
+      if (filenameTimestamp == null) {
+        try {
+          remoteModified = await checkRemoteVersion(url);
+        } catch (_) {}
+      }
 
       final meta = DictionaryMetadata()
         ..name = fileName
         ..sourceName = sourceName
         ..remoteUrl = url
         ..localPath = savePath
-        ..lastUpdated = remoteModified ?? DateTime.now()
+        ..lastUpdated = filenameTimestamp ?? remoteModified ?? DateTime.now()
         ..remoteLastModified = remoteModified
         ..isDownloaded = true
         ..sizeMb = sizeMb;

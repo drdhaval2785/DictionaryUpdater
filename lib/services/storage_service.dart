@@ -112,6 +112,28 @@ class StorageService {
     return null;
   }
 
+  /// Extracts the timestamp from an Indic-dict filename.
+  /// Pattern: __2022-01-22_15-15-47Z__
+  /// Returns a DateTime in UTC.
+  DateTime? extractTimestamp(String fileName) {
+    final regExp = RegExp(r'__(\d{4}-\d{2}-\d{2})_(\d{2})-(\d{2})-(\d{2})Z__');
+    final match = regExp.firstMatch(fileName);
+    if (match != null) {
+      final date = match.group(1);
+      final h = match.group(2);
+      final m = match.group(3);
+      final s = match.group(4);
+      // Construct ISO 8601 string: 2022-01-22T15:15:47Z
+      final isoString = '${date}T$h:$m:${s}Z';
+      try {
+        return DateTime.parse(isoString);
+      } catch (e) {
+        debugPrint('Error parsing extracted timestamp $isoString: $e');
+      }
+    }
+    return null;
+  }
+
   /// Looks for an existing file that shares the same base name but has a different
   /// full filename (likely an older timestamped version).
   /// Searches both the source-specific subfolder and the root folder.

@@ -243,6 +243,11 @@ class _IndicDictTabState extends ConsumerState<IndicDictTab> with AutomaticKeepA
             }
           },
         );
+        if (mounted) {
+          setState(() {
+            entry.isSelected = false;
+          });
+        }
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -575,8 +580,24 @@ _DictEntry _parseEntry(String url, String folderPath, Set<String> localFiles, St
   _DictStatus status = _DictStatus.newFile;
   if (localFiles.contains(filename)) {
     status = _DictStatus.upToDate;
-  } else if (baseName != null && localFiles.any((f) => f.startsWith('${baseName}_'))) {
-    status = _DictStatus.updateAvailable;
+  } else if (baseName != null) {
+    // Check for any file with the same base name to see if it's an update
+    final existingFile = localFiles.firstWhere(
+      (f) => f.startsWith('${baseName}_') || f.contains('${baseName}__'),
+      orElse: () => '',
+    );
+
+    if (existingFile.isNotEmpty) {
+      final remoteTs = storage.extractTimestamp(filename);
+      final localTs = storage.extractTimestamp(existingFile);
+
+      if (remoteTs != null && localTs != null) {
+        status = remoteTs.isAfter(localTs) ? _DictStatus.updateAvailable : _DictStatus.upToDate;
+      } else {
+        // Fallback for missing timestamps
+        status = _DictStatus.updateAvailable;
+      }
+    }
   }
 
   final entry = _DictEntry(

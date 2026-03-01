@@ -68,15 +68,16 @@ class FakeCollection<T> extends Fake implements IsarCollection<T> {
   
   @override
   QueryBuilder<T, T, QFilterCondition> filter() {
-    return FakeQueryBuilder<T>() as QueryBuilder<T, T, QFilterCondition>;
+    return FakeQueryBuilder<T, T, QFilterCondition>() as QueryBuilder<T, T, QFilterCondition>;
   }
 }
 
-class FakeQueryBuilder<T> extends Fake {
+class FakeQueryBuilder<T, R, S> extends Fake implements QueryBuilder<T, R, S> {
   @override
   dynamic noSuchMethod(Invocation invocation) => this;
   
-  Future<T?> findFirst() async => null;
+  @override
+  Future<R?> findFirst() async => null;
 }
 
 void main() {
@@ -121,5 +122,42 @@ void main() {
     
     final newFile = File(p.join(storageDir, newName));
     expect(await newFile.exists(), isTrue, reason: 'New version should be present');
+  });
+
+  group('getDictionaryStatus with filename timestamps', () {
+    test('identifies update available when upstream timestamp is newer', () async {
+      const oldName = 'dict__2022-01-01_12-00-00Z__0MB.tar.gz';
+      const newName = 'dict__2023-01-01_12-00-00Z__0MB.tar.gz';
+      final url = 'https://example.com/$newName';
+      
+      final storageDir = p.join(tempDir.path, 'DictionaryData');
+      await File(p.join(storageDir, oldName)).create(recursive: true);
+
+      final status = await client.getDictionaryStatus(url, fakeIsar);
+      expect(status, equals(DictionaryStatus.updateAvailable));
+    });
+
+    test('identifies up to date when upstream timestamp is older or same as local', () async {
+      const oldName = 'dict__2023-01-01_12-00-00Z__0MB.tar.gz';
+      const newName = 'dict__2022-01-01_12-00-00Z__0MB.tar.gz'; // Older upstream
+      final url = 'https://example.com/$newName';
+      
+      final storageDir = p.join(tempDir.path, 'DictionaryData');
+      await File(p.join(storageDir, oldName)).create(recursive: true);
+
+      final status = await client.getDictionaryStatus(url, fakeIsar);
+      expect(status, equals(DictionaryStatus.upToDate));
+    });
+
+    test('identifies up to date when exact file exists with timestamp', () async {
+      const fileName = 'shared__2023-01-01_12-00-00Z__0MB.tar.gz';
+      final url = 'https://example.com/$fileName';
+      
+      final storageDir = p.join(tempDir.path, 'DictionaryData');
+      await File(p.join(storageDir, fileName)).create(recursive: true);
+
+      final status = await client.getDictionaryStatus(url, fakeIsar);
+      expect(status, equals(DictionaryStatus.upToDate));
+    });
   });
 }

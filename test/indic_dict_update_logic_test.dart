@@ -30,6 +30,18 @@ void main() {
              isNull); // Not an indic-dict pattern (needs __)
     });
 
+    test('extractTimestamp correctly parses the timestamp from filename', () {
+      final ts = storageService.extractTimestamp('anekArthadhvanimanjarI__2022-01-22_15-15-47Z__0MB.tar.gz');
+      expect(ts, isNotNull);
+      expect(ts!.isUtc, isTrue);
+      expect(ts.year, 2022);
+      expect(ts.month, 1);
+      expect(ts.day, 22);
+      expect(ts.hour, 15);
+      expect(ts.minute, 15);
+      expect(ts.second, 47);
+    });
+
     test('findExistingVersion detects older version with different timestamp', () async {
       const oldName = 'abhidhAnachintAmaNi__2023-12-06_13-57-22Z__0MB.tar.gz';
       const newName = 'abhidhAnachintAmaNi__2024-02-26_10-00-00Z__1MB.tar.gz';
