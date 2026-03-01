@@ -57,9 +57,24 @@ void main() {
       expect(found, isNull, reason: 'Should return null if the exact file is already there (no replacement needed)');
     });
 
-    test('findExistingVersion returns null if no version exists', () async {
-      final found = await storageService.findExistingVersion('non_existent__2023.zip');
-      expect(found, isNull);
+    test('dictionaryExists finds files in root when sourceName is provided', () async {
+      const fileName = 'root_file__2023.zip';
+      final rootDir = p.join(tempDir.path, 'DictionaryData');
+      await File(p.join(rootDir, fileName)).create(recursive: true);
+
+      final exists = await storageService.dictionaryExists(fileName, sourceName: 'SomeSource');
+      expect(exists, isTrue, reason: 'Should find the file in root even if sourceName is SomeSource');
+    });
+
+    test('findExistingVersion finds old version in root when searching from source subfolder', () async {
+      const oldName = 'base_name__old.zip';
+      const newName = 'base_name__new.zip';
+      final rootDir = p.join(tempDir.path, 'DictionaryData');
+      await File(p.join(rootDir, oldName)).create(recursive: true);
+
+      final found = await storageService.findExistingVersion(newName, sourceName: 'SomeSource');
+      expect(found, isNotNull);
+      expect(p.basename(found!.path), equals(oldName));
     });
   });
 }

@@ -89,9 +89,19 @@ class StorageService {
       sanitizeFileName(name).replaceAll(RegExp(r'_{2,}'), '_');
 
   /// Checks if a dictionary file exists locally.
+  /// First checks the source-specific subfolder, then falls back to the root folder.
   Future<bool> dictionaryExists(String fileName, {String? sourceName}) async {
-    final base = await getStorageDirectory(sourceName: sourceName);
-    return File(p.join(base.path, sanitizeFileName(fileName))).exists();
+    final sanitizedName = sanitizeFileName(fileName);
+    
+    // Check source-specific subfolder
+    if (sourceName != null && sourceName.isNotEmpty) {
+      final sourceBase = await getStorageDirectory(sourceName: sourceName);
+      if (await File(p.join(sourceBase.path, sanitizedName)).exists()) return true;
+    }
+
+    // Check root folder
+    final rootBase = await getStorageDirectory();
+    return File(p.join(rootBase.path, sanitizedName)).exists();
   }
 
   /// Extracts the base part of an Indic-dict filename (part before the first '__').
@@ -104,25 +114,39 @@ class StorageService {
 
   /// Looks for an existing file that shares the same base name but has a different
   /// full filename (likely an older timestamped version).
+  /// Searches both the source-specific subfolder and the root folder.
   Future<File?> findExistingVersion(String newFileName, {String? sourceName}) async {
-    final baseDir = await getStorageDirectory(sourceName: sourceName);
-    if (!await baseDir.exists()) return null;
-
-    final targetBase = extractBaseName(newFileName);
+    final sanitizedNewName = sanitizeFileName(newFileName);
+    final targetBase = extractBaseName(sanitizedNewName);
     if (targetBase == null) return null;
 
+    // 1. Check source-specific subfolder
+    if (sourceName != null && sourceName.isNotEmpty) {
+      final sourceBase = await getStorageDirectory(sourceName: sourceName);
+      final found = await _findInDirectory(sourceBase, sanitizedNewName, targetBase);
+      if (found != null) return found;
+    }
+
+    // 2. Check root folder
+    final rootBase = await getStorageDirectory();
+    return _findInDirectory(rootBase, sanitizedNewName, targetBase);
+  }
+
+  Future<File?> _findInDirectory(Directory dir, String newFileName, String targetBase) async {
+    if (!await dir.exists()) return null;
     try {
-      final List<FileSystemEntity> entities = await baseDir.list().toList();
+      final List<FileSystemEntity> entities = await dir.list().toList();
       for (final entity in entities) {
         if (entity is File) {
           final existingName = p.basename(entity.path);
+          // Match if it's a different filename but has the same base (indic-dict pattern)
           if (existingName != newFileName && extractBaseName(existingName) == targetBase) {
             return entity;
           }
         }
       }
     } catch (e) {
-      debugPrint('Error listing storage directory: $e');
+      debugPrint('Error listing directory ${dir.path}: $e');
     }
     return null;
   }

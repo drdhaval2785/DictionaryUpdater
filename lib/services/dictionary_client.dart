@@ -195,11 +195,17 @@ class DictionaryClient {
     final fileName = _storageService.sanitizeFileName(p.basename(url));
     final savePath = p.join(dir.path, fileName);
 
-    // Clean up old version if it exists
+    // Clean up old version if it exists (checks both subfolder and root via StorageService)
     final oldVersion = await _storageService.findExistingVersion(fileName, sourceName: sourceName);
     if (oldVersion != null) {
       debugPrint('Replacing old version: ${oldVersion.path} with $fileName');
-      await oldVersion.delete();
+      try {
+        if (await oldVersion.exists()) {
+          await oldVersion.delete();
+        }
+      } catch (e) {
+        debugPrint('Error deleting old version: $e');
+      }
     }
 
     try {

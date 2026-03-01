@@ -70,6 +70,7 @@ class _IndicDictTabState extends ConsumerState<IndicDictTab> with AutomaticKeepA
   String? _indexError;
   List<_TarsSource> _sources = [];
   final List<String> _failedResources = [];
+  final Set<String> _rootFiles = {}; // Files in the root DictionaryData folder
 
   int get _fetchedCount => _sources.where((s) => s.entries != null).length;
   int get _totalCount => _sources.length;
@@ -86,8 +87,26 @@ class _IndicDictTabState extends ConsumerState<IndicDictTab> with AutomaticKeepA
 
   Future<void> _loadIndex() async {
     try {
-      final markdown = await ref.read(repoIndexProvider.future);
       final storage = ref.read(storageServiceProvider);
+      
+      // 1. Fetch files in root DictionaryData folder once
+      _rootFiles.clear();
+      try {
+        final rootDir = await storage.getStorageDirectory();
+        if (await rootDir.exists()) {
+          final list = await rootDir.list().toList();
+          for (final f in list) {
+            if (f is File) {
+              // Sanitize disk filename to match URL-based sanitization
+              _rootFiles.add(storage.sanitizeFileName(p.basename(f.path)));
+            }
+          }
+        }
+      } catch (e) {
+        debugPrint('Error listing root DictionaryData: $e');
+      }
+
+      final markdown = await ref.read(repoIndexProvider.future);
       final sources = _parseIndices(markdown, storage);
       if (mounted) {
         setState(() {
@@ -141,12 +160,15 @@ class _IndicDictTabState extends ConsumerState<IndicDictTab> with AutomaticKeepA
         return;
       }
 
-      final localFiles = <String>{};
+      final localFiles = Set<String>.from(_rootFiles);
       if (await dir.exists()) {
         try {
           final list = await dir.list().toList();
           for (final f in list) {
-            if (f is File) localFiles.add(p.basename(f.path));
+            if (f is File) {
+              // Sanitize disk filename to match URL-based sanitization
+              localFiles.add(storage.sanitizeFileName(p.basename(f.path)));
+            }
           }
         } catch (_) {}
       }
@@ -522,28 +544,52 @@ List<String> _parseTarsMd(String content) {
 }
 
 _DictEntry _parseEntry(String url, String folderPath, Set<String> localFiles, StorageService storage) {
-  final rawFilename = url.split('/').last;
+  // 1. Decode URL components (e.g. %20 -> ' ') before sanitizing
+  final rawFilename = Uri.decodeComponent(url.split('/').last);
   final filename = storage.sanitizeFileName(rawFilename);
+  
   final sizeRe = RegExp(r'_([\d.]+)MB\.', caseSensitive: false);
   final sm = sizeRe.firstMatch(filename);
   final sizeMb = sm != null ? (double.tryParse(sm.group(1)!) ?? 0.0) : 0.0;
+  
   final fullRe = RegExp(r'^(.+?)_(\d{8})_(\d{6})_([\d.]+)MB\.(.+)$', caseSensitive: false);
   final m = fullRe.firstMatch(filename);
-  String name = filename, date = '', baseName = filename;
+  
+  String name = filename;
+  String date = '';
+  String? baseName;
+
   if (m != null) {
     baseName = m.group(1)!;
     name = baseName.replaceAll('_', ' ');
     final rd = m.group(2)!;
     date = '${rd.substring(0, 4)}-${rd.substring(4, 6)}-${rd.substring(6, 8)}';
+  } else {
+    // Fallback to extractBaseName from storage service if regex fails
+    baseName = storage.extractBaseName(filename);
+    if (baseName != null) {
+      name = baseName.replaceAll('_', ' ');
+    }
   }
+
   _DictStatus status = _DictStatus.newFile;
   if (localFiles.contains(filename)) {
     status = _DictStatus.upToDate;
-  } else if (localFiles.where((f) => f.startsWith('${baseName}_')).isNotEmpty) {
+  } else if (baseName != null && localFiles.any((f) => f.startsWith('${baseName}_'))) {
     status = _DictStatus.updateAvailable;
   }
 
-  final entry = _DictEntry(url: url, name: name, date: date, sizeMb: sizeMb, folderPath: folderPath, status: status);
-  entry.isSelected = status != _DictStatus.upToDate;
+  final entry = _DictEntry(
+    url: url,
+    name: name,
+    date: date,
+    sizeMb: sizeMb,
+    folderPath: folderPath,
+    status: status,
+  );
+  
+  // Only auto-select if a new file or an update is available
+  entry.isSelected = (status != _DictStatus.upToDate);
+  
   return entry;
 }
