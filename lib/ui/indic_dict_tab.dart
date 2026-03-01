@@ -68,9 +68,10 @@ class _IndicDictTabState extends ConsumerState<IndicDictTab> with AutomaticKeepA
 
   bool _loadingIndex = true;
   String? _indexError;
-  List<_TarsSource> _sources = [];
+  final List<_TarsSource> _sources = [];
   final List<String> _failedResources = [];
   final Set<String> _rootFiles = {}; // Files in the root DictionaryData folder
+  CancelToken? _downloadCancelToken;
 
   int get _fetchedCount => _sources.where((s) => s.entries != null).length;
   int get _totalCount => _sources.length;
@@ -227,6 +228,9 @@ class _IndicDictTabState extends ConsumerState<IndicDictTab> with AutomaticKeepA
     final client = ref.read(dictionaryClientProvider);
     final isar = ref.read(isarProvider);
 
+    _downloadCancelToken = CancelToken();
+    ref.read(indicDownloadingProvider.notifier).state = true;
+
     for (final entry in selected) {
       if (!mounted) break;
       if (entry.status == _DictStatus.upToDate) continue;
@@ -237,6 +241,7 @@ class _IndicDictTabState extends ConsumerState<IndicDictTab> with AutomaticKeepA
           entry.url,
           isar,
           sourceName: entry.folderPath,
+          cancelToken: _downloadCancelToken,
           onProgress: (double progress) {
             if (mounted) {
               setState(() => entry.downloadProgress = progress);
@@ -249,6 +254,10 @@ class _IndicDictTabState extends ConsumerState<IndicDictTab> with AutomaticKeepA
           });
         }
       } catch (e) {
+        if (e is DioException && e.type == DioExceptionType.cancel) {
+          debugPrint('Download cancelled: ${entry.name}');
+          break;
+        }
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Failed to download ${entry.name}: $e')),
@@ -263,7 +272,14 @@ class _IndicDictTabState extends ConsumerState<IndicDictTab> with AutomaticKeepA
       }
     }
     
+    _downloadCancelToken = null;
+    ref.read(indicDownloadingProvider.notifier).state = false;
     await _loadIndex();
+  }
+
+  void _cancelDownloads() {
+    _downloadCancelToken?.cancel('User cancelled');
+    _downloadCancelToken = null;
   }
 
   void _showFailureDialog() {
@@ -305,6 +321,12 @@ class _IndicDictTabState extends ConsumerState<IndicDictTab> with AutomaticKeepA
       }
     });
 
+    ref.listen(indicCancelTriggerProvider, (prev, next) {
+      if (next > 0) {
+        _cancelDownloads();
+      }
+    });
+
     if (_loadingIndex) {
       return const Center(
         child: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -339,6 +361,8 @@ class _IndicDictTabState extends ConsumerState<IndicDictTab> with AutomaticKeepA
     final selectedCount = _selectedDicts.length;
     final totalSizeMb = _selectedDicts.fold<double>(0.0, (sum, e) => sum + e.sizeMb);
 
+    final isDownloading = _sources.expand((s) => s.entries ?? []).any((e) => e.isDownloading);
+
     return Column(children: [
       if (!_allFetched) LinearProgressIndicator(value: _totalCount == 0 ? null : _fetchedCount / _totalCount),
       Expanded(
@@ -353,7 +377,7 @@ class _IndicDictTabState extends ConsumerState<IndicDictTab> with AutomaticKeepA
           }).toList(),
         ),
       ),
-      if (selectedCount > 0)
+      if (selectedCount > 0 || isDownloading)
         Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
@@ -361,16 +385,27 @@ class _IndicDictTabState extends ConsumerState<IndicDictTab> with AutomaticKeepA
             boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 4, offset: const Offset(0, -2))],
           ),
           child: SafeArea(
-            child: ElevatedButton.icon(
-              onPressed: _downloadSelected,
-              icon: const Icon(Icons.download),
-              label: Text('Download $selectedCount (${totalSizeMb.toStringAsFixed(1)} MB)'),
-              style: ElevatedButton.styleFrom(
-                minimumSize: const Size.fromHeight(48),
-                backgroundColor: Colors.indigo,
-                foregroundColor: Colors.white,
-              ),
-            ),
+            child: isDownloading
+                ? ElevatedButton.icon(
+                    onPressed: _cancelDownloads,
+                    icon: const Icon(Icons.stop),
+                    label: const Text('Stop Downloads'),
+                    style: ElevatedButton.styleFrom(
+                      minimumSize: const Size.fromHeight(48),
+                      backgroundColor: Colors.red,
+                      foregroundColor: Colors.white,
+                    ),
+                  )
+                : ElevatedButton.icon(
+                    onPressed: _downloadSelected,
+                    icon: const Icon(Icons.download),
+                    label: Text('Download $selectedCount (${totalSizeMb.toStringAsFixed(1)} MB)'),
+                    style: ElevatedButton.styleFrom(
+                      minimumSize: const Size.fromHeight(48),
+                      backgroundColor: Colors.indigo,
+                      foregroundColor: Colors.white,
+                    ),
+                  ),
           ),
         ),
     ]);

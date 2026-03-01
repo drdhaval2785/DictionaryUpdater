@@ -99,6 +99,10 @@ class _CustomizedSourcesTabState extends ConsumerState<CustomizedSourcesTab> {
       }
     }
 
+    if (ref.watch(indicDownloadingProvider)) {
+      isAnyDownloading = true;
+    }
+
     return Stack(
       children: [
         Column(
@@ -190,9 +194,12 @@ class _CustomizedSourcesTabState extends ConsumerState<CustomizedSourcesTab> {
                 if (isAnyDownloading)
                   FloatingActionButton.extended(
                     onPressed: () {
+                      // Stop customized sources
                       for (final source in allSources) {
                         ref.read(sourceItemsProvider(source).notifier).cancelDownloads();
                       }
+                      // Stop Indic-dict tab
+                      ref.read(indicCancelTriggerProvider.notifier).state++;
                     },
                     backgroundColor: Theme.of(context).colorScheme.errorContainer,
                     foregroundColor: Theme.of(context).colorScheme.onErrorContainer,

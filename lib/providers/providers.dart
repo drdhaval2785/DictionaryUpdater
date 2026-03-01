@@ -117,3 +117,9 @@ final repoIndexProvider = FutureProvider<String>((ref) async {
   final resp = await dio.get<String>(url);
   return resp.data ?? '';
 });
+
+/// Provider for coordinating Indic-dict download cancellation.
+final indicCancelTriggerProvider = StateProvider<int>((ref) => 0);
+
+/// Provider to track if the Indic-dict tab is currently downloading.
+final indicDownloadingProvider = StateProvider<bool>((ref) => false);
