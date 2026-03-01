@@ -5,6 +5,7 @@ import '../providers/providers.dart';
 import '../models/dictionary_models.dart';
 import 'source_expansion_panel.dart';
 import 'indic_dict_tab.dart';
+import '../services/dictionary_client.dart';
 
 class SyncCenterScreen extends ConsumerStatefulWidget {
   const SyncCenterScreen({super.key});
@@ -56,6 +57,8 @@ class _CustomizedSourcesTabState extends ConsumerState<CustomizedSourcesTab> {
   final _labelCtrl = TextEditingController();
   final _contentCtrl = TextEditingController();
   bool _isAdding = false;
+  int _batchTotal = 0;
+  int _batchCurrent = 0;
 
   @override
   void dispose() {
@@ -86,8 +89,17 @@ class _CustomizedSourcesTabState extends ConsumerState<CustomizedSourcesTab> {
     double totalSizeMb = 0;
     bool isAnyDownloading = false;
 
+    int totalAvailable = 0;
+    int totalDownloaded = 0;
+    int totalUpToDate = 0;
+    int totalNewer = 0;
+
     for (final source in allSources) {
       final items = ref.watch(sourceItemsProvider(source)).valueOrNull ?? [];
+      totalAvailable += items.length;
+      totalUpToDate += items.where((i) => i.status == DictionaryStatus.upToDate).length;
+      totalNewer += items.where((i) => i.status == DictionaryStatus.updateAvailable).length;
+
       final selectedItems = items.where((i) => i.isSelected).toList();
       totalSelected += selectedItems.length;
       for (final item in selectedItems) {
@@ -98,6 +110,7 @@ class _CustomizedSourcesTabState extends ConsumerState<CustomizedSourcesTab> {
         isAnyDownloading = true;
       }
     }
+    totalDownloaded = totalUpToDate + totalNewer;
 
     if (ref.watch(indicDownloadingProvider)) {
       isAnyDownloading = true;
@@ -155,18 +168,25 @@ class _CustomizedSourcesTabState extends ConsumerState<CustomizedSourcesTab> {
                 ),
               ),
             ),
-            if (totalSelected > 0)
+            // Summary Stats Header
+            if (totalAvailable > 0)
               Container(
                 width: double.infinity,
-                color: Theme.of(context).colorScheme.primaryContainer,
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: Text(
-                  'Total Selection: $totalSelected dictionaries (${totalSizeMb.toStringAsFixed(1)} MB)',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 13,
-                    color: Theme.of(context).colorScheme.onPrimaryContainer,
-                  ),
+                color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '$totalAvailable dictionaries available • $totalDownloaded downloaded',
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '$totalUpToDate up to date • $totalNewer have newer version',
+                      style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                    ),
+                  ],
                 ),
               ),
             Expanded(
@@ -186,33 +206,75 @@ class _CustomizedSourcesTabState extends ConsumerState<CustomizedSourcesTab> {
         ),
         if (totalSelected > 0 || isAnyDownloading)
           Positioned(
-            right: 16,
-            bottom: 16,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (isAnyDownloading)
-                  FloatingActionButton.extended(
-                    onPressed: () {
-                      // Stop customized sources
-                      for (final source in allSources) {
-                        ref.read(sourceItemsProvider(source).notifier).cancelDownloads();
-                      }
-                      // Stop Indic-dict tab
-                      ref.read(indicCancelTriggerProvider.notifier).state++;
-                    },
-                    backgroundColor: Theme.of(context).colorScheme.errorContainer,
-                    foregroundColor: Theme.of(context).colorScheme.onErrorContainer,
-                    icon: const Icon(Icons.stop_rounded),
-                    label: const Text('Stop All'),
-                  ),
-                if (totalSelected > 0 && !isAnyDownloading)
-                  FloatingActionButton.extended(
-                    icon: const Icon(Icons.download_rounded),
-                    label: Text('Download $totalSelected (${totalSizeMb.toStringAsFixed(1)} MB)'),
-                    onPressed: () => _downloadAll(allSources, totalSizeMb),
-                  ),
-              ],
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Theme.of(context).cardColor,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.1),
+                    blurRadius: 4,
+                    offset: const Offset(0, -2),
+                  )
+                ],
+              ),
+              child: SafeArea(
+                child: isAnyDownloading
+                    ? Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(4),
+                                    child: LinearProgressIndicator(
+                                      value: _batchTotal > 0 ? _batchCurrent / _batchTotal : 0,
+                                      minHeight: 8,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Text(
+                                  '$_batchCurrent/$_batchTotal downloaded',
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                                ),
+                              ],
+                            ),
+                          ),
+                          ElevatedButton.icon(
+                            onPressed: () {
+                              for (final source in allSources) {
+                                ref.read(sourceItemsProvider(source).notifier).cancelDownloads();
+                              }
+                              ref.read(indicCancelTriggerProvider.notifier).state++;
+                            },
+                            icon: const Icon(Icons.stop),
+                            label: const Text('Stop All'),
+                            style: ElevatedButton.styleFrom(
+                              minimumSize: const Size.fromHeight(48),
+                              backgroundColor: Colors.red,
+                              foregroundColor: Colors.white,
+                            ),
+                          ),
+                        ],
+                      )
+                    : ElevatedButton.icon(
+                        icon: const Icon(Icons.download_rounded),
+                        label: Text('Download $totalSelected (${totalSizeMb.toStringAsFixed(1)} MB)'),
+                        onPressed: () => _downloadAll(allSources, totalSizeMb),
+                        style: ElevatedButton.styleFrom(
+                          minimumSize: const Size.fromHeight(48),
+                          backgroundColor: Theme.of(context).colorScheme.primary,
+                          foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                        ),
+                      ),
+              ),
             ),
           ),
       ],
@@ -247,10 +309,31 @@ class _CustomizedSourcesTabState extends ConsumerState<CustomizedSourcesTab> {
 
     if (confirmed != true || !mounted) return;
 
+    int totalToDownload = 0;
+    for (final source in sources) {
+      final items = ref.read(sourceItemsProvider(source)).valueOrNull ?? [];
+      totalToDownload += items.where((i) => i.isSelected).length;
+    }
+
+    setState(() {
+      _batchTotal = totalToDownload;
+      _batchCurrent = 0;
+    });
+
     for (final source in sources) {
       if (!mounted) break;
       final notifier = ref.read(sourceItemsProvider(source).notifier);
-      await notifier.downloadSelected(context, skipConfirmation: true);
+      await notifier.downloadSelected(
+        context,
+        skipConfirmation: true,
+        onDownloadComplete: () {
+          if (mounted) {
+            setState(() {
+              _batchCurrent++;
+            });
+          }
+        },
+      );
     }
   }
 

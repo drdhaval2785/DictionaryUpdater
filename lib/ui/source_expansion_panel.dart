@@ -187,7 +187,7 @@ class SourceItemsNotifier extends AutoDisposeFamilyAsyncNotifier<
   }
 
   /// Download all selected items and persist metadata to Isar.
-  Future<void> downloadSelected(BuildContext context, {bool skipConfirmation = false}) async {
+  Future<void> downloadSelected(BuildContext context, {bool skipConfirmation = false, VoidCallback? onDownloadComplete}) async {
     final items = state.valueOrNull;
     if (items == null) return;
 
@@ -283,6 +283,7 @@ class SourceItemsNotifier extends AutoDisposeFamilyAsyncNotifier<
             isSelected: false,
           ),
         );
+        onDownloadComplete?.call();
       } catch (e) {
         if (e is DioException && e.type == DioExceptionType.cancel) {
           debugPrint('Download cancelled for ${item.name}');
