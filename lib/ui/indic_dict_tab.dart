@@ -72,6 +72,8 @@ class _IndicDictTabState extends ConsumerState<IndicDictTab> with AutomaticKeepA
   final List<String> _failedResources = [];
   final Set<String> _rootFiles = {}; // Files in the root DictionaryData folder
   CancelToken? _downloadCancelToken;
+  int _batchTotal = 0;
+  int _batchCurrent = 0;
 
   int get _fetchedCount => _sources.where((s) => s.entries != null).length;
   int get _totalCount => _sources.length;
@@ -231,6 +233,11 @@ class _IndicDictTabState extends ConsumerState<IndicDictTab> with AutomaticKeepA
 
     _downloadCancelToken = CancelToken();
     ref.read(indicDownloadingProvider.notifier).state = true;
+    
+    setState(() {
+      _batchTotal = selected.length;
+      _batchCurrent = 0;
+    });
 
     for (final entry in selected) {
       if (!mounted) break;
@@ -252,6 +259,11 @@ class _IndicDictTabState extends ConsumerState<IndicDictTab> with AutomaticKeepA
         if (mounted) {
           setState(() {
             entry.isSelected = false;
+          });
+        }
+        if (mounted) {
+          setState(() {
+            _batchCurrent++;
           });
         }
       } catch (e) {
@@ -362,10 +374,37 @@ class _IndicDictTabState extends ConsumerState<IndicDictTab> with AutomaticKeepA
     final selectedCount = _selectedDicts.length;
     final totalSizeMb = _selectedDicts.fold<double>(0.0, (sum, e) => sum + e.sizeMb);
 
-    final isDownloading = _sources.expand<_DictEntry>((s) => s.entries ?? <_DictEntry>[]).any((e) => e.isDownloading);
+    final allEntries = _sources.expand<_DictEntry>((s) => s.entries ?? <_DictEntry>[]).toList();
+    final totalAvailable = allEntries.length;
+    final totalUpToDate = allEntries.where((e) => e.status == _DictStatus.upToDate).length;
+    final totalNewer = allEntries.where((e) => e.status == _DictStatus.updateAvailable).length;
+    final totalDownloaded = totalUpToDate + totalNewer;
+
+    final isDownloading = allEntries.any((e) => e.isDownloading);
 
     return Column(children: [
       if (!_allFetched) LinearProgressIndicator(value: _totalCount == 0 ? null : _fetchedCount / _totalCount),
+      // Summary Stats Header
+      if (_allFetched && totalAvailable > 0)
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '$totalAvailable dictionaries available • $totalDownloaded downloaded',
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                '$totalUpToDate up to date • $totalNewer have newer version',
+                style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant),
+              ),
+            ],
+          ),
+        ),
       Expanded(
         child: ListView(
           padding: const EdgeInsets.only(bottom: 80),
@@ -387,15 +426,41 @@ class _IndicDictTabState extends ConsumerState<IndicDictTab> with AutomaticKeepA
           ),
           child: SafeArea(
             child: isDownloading
-                ? ElevatedButton.icon(
-                    onPressed: _cancelDownloads,
-                    icon: const Icon(Icons.stop),
-                    label: const Text('Stop Downloads'),
-                    style: ElevatedButton.styleFrom(
-                      minimumSize: const Size.fromHeight(48),
-                      backgroundColor: Colors.red,
-                      foregroundColor: Colors.white,
-                    ),
+                ? Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(4),
+                                child: LinearProgressIndicator(
+                                  value: _batchTotal > 0 ? _batchCurrent / _batchTotal : 0,
+                                  minHeight: 8,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Text(
+                              '$_batchCurrent/$_batchTotal downloaded',
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                            ),
+                          ],
+                        ),
+                      ),
+                      ElevatedButton.icon(
+                        onPressed: _cancelDownloads,
+                        icon: const Icon(Icons.stop),
+                        label: const Text('Stop Downloads'),
+                        style: ElevatedButton.styleFrom(
+                          minimumSize: const Size.fromHeight(48),
+                          backgroundColor: Colors.red,
+                          foregroundColor: Colors.white,
+                        ),
+                      ),
+                    ],
                   )
                 : ElevatedButton.icon(
                     onPressed: _downloadSelected,
