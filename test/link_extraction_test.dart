@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:sdu/services/dictionary_client.dart';
+import 'package:dictionary_updater/services/dictionary_client.dart';
 
 void main() {
   group('DictionaryClient Link Extraction', () {

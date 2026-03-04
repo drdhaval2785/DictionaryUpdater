@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:sdu/services/storage_service.dart';
+import 'package:dictionary_updater/services/storage_service.dart';
 
 void main() {
   group('StorageService Naming Logic', () {

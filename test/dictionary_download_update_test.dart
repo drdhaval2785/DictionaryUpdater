@@ -3,8 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:dio/dio.dart';
 import 'package:isar/isar.dart';
 import 'package:path/path.dart' as p;
-import 'package:sdu/services/dictionary_client.dart';
-import 'package:sdu/services/storage_service.dart';
+import 'package:dictionary_updater/services/dictionary_client.dart';
+import 'package:dictionary_updater/services/storage_service.dart';
 
 // Use Fake instead of Mock to avoid need for build_runner
 class FakeDio extends Fake implements Dio {

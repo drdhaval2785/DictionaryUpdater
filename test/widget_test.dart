@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:sdu/main.dart';
-import 'package:sdu/providers/providers.dart';
-import 'package:sdu/models/dictionary_models.dart';
+import 'package:dictionary_updater/main.dart';
+import 'package:dictionary_updater/providers/providers.dart';
+import 'package:dictionary_updater/models/dictionary_models.dart';
 import 'package:dio/dio.dart';
 
 void main() {
