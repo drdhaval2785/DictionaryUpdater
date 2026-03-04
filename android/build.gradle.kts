@@ -48,6 +48,12 @@ subprojects {
     } else {
         project.afterEvaluate {
             applyNamespaceWorkaround(this)
+            // Force compileSdkVersion on all subprojects (e.g. isar_flutter_libs)
+            // to fix "android:attr/lStar not found" error which requires API >= 31.
+            if (this.hasProperty("android")) {
+                val android = this.extensions.getByName("android") as com.android.build.gradle.BaseExtension
+                android.compileSdkVersion(36)
+            }
         }
     }
 }

@@ -7,7 +7,7 @@ plugins {
 
 android {
     namespace = "com.example.sdu.sdu"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = 36
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
