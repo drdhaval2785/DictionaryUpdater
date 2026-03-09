@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.0.3] - 2026-03-09
+- Improved download visibility: specific dictionary names are now shown during download.
+- Permanent download information: download location and HDICT links are now always visible.
+- Enhanced UI robustness: converted main layout to CustomScrollView to prevent overflows on smaller devices.
+- Refactored UI components for better consistency and maintainability.
+
 ## [1.0.2] - 2026-03-09
 - Updated User Guide with HDICT links and usage instructions.
 - Made HDICT links clickable in the footer and manual screen.
