@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shimmer/shimmer.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../providers/providers.dart';
 import '../models/dictionary_models.dart';
 import 'source_expansion_panel.dart';
@@ -88,17 +89,33 @@ class _SyncCenterScreenState extends ConsumerState<SyncCenterScreen> {
             },
           ),
           const SizedBox(height: 4),
-          Row(
-            children: [
-              Icon(Icons.tips_and_updates_outlined, size: 14, color: theme.colorScheme.secondary),
-              const SizedBox(width: 8),
-              const Expanded(
-                child: Text(
-                  'Use any dictionary reader (e.g. HDICT: apps.apple.com/in/app/hdict/id6759493062)',
-                  style: TextStyle(fontSize: 10, color: Colors.grey),
+          InkWell(
+            onTap: () => launchUrl(Uri.parse('https://apps.apple.com/in/app/hdict/id6759493062')),
+            child: Row(
+              children: [
+                Icon(Icons.tips_and_updates_outlined, size: 14, color: theme.colorScheme.secondary),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text.rich(
+                    TextSpan(
+                      text: 'Use any dictionary reader (e.g. ',
+                      style: TextStyle(fontSize: 10, color: Colors.grey),
+                      children: [
+                        TextSpan(
+                          text: 'HDICT',
+                          style: TextStyle(
+                            color: Colors.blue,
+                            decoration: TextDecoration.underline,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        TextSpan(text: ')'),
+                      ],
+                    ),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ],
       ),

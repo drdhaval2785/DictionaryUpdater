@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../providers/providers.dart';
 
 class UserManualScreen extends ConsumerWidget {
@@ -32,7 +33,14 @@ class UserManualScreen extends ConsumerWidget {
           if (snapshot.hasError) {
             return Center(child: Text('Error loading manual: ${snapshot.error}'));
           }
-          return Markdown(data: snapshot.data ?? 'No guide found.');
+          return Markdown(
+            data: snapshot.data ?? 'No guide found.',
+            onTapLink: (text, href, title) {
+              if (href != null) {
+                launchUrl(Uri.parse(href));
+              }
+            },
+          );
         },
       ),
     );
