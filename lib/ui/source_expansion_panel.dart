@@ -187,7 +187,7 @@ class SourceItemsNotifier extends AutoDisposeFamilyAsyncNotifier<
   }
 
   /// Download all selected items and persist metadata to Isar.
-  Future<void> downloadSelected(BuildContext context, {bool skipConfirmation = false, VoidCallback? onDownloadComplete}) async {
+  Future<void> downloadSelected(BuildContext context, {bool skipConfirmation = false, void Function(String)? onFileStarted, VoidCallback? onDownloadComplete}) async {
     final items = state.valueOrNull;
     if (items == null) return;
 
@@ -248,6 +248,7 @@ class SourceItemsNotifier extends AutoDisposeFamilyAsyncNotifier<
 
       _patch(listIndex, item.copyWith(isDownloading: true, downloadProgress: 0));
       if (!context.mounted) return;
+      onFileStarted?.call(item.name);
       _setDownloadState(
           ref.read(downloadStateProvider(arg)).copyWith(
                 done: i,

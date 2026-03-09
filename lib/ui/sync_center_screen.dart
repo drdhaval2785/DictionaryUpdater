@@ -124,6 +124,7 @@ class _CustomizedSourcesTabState extends ConsumerState<CustomizedSourcesTab> {
   bool _isAdding = false;
   int _batchTotal = 0;
   int _batchCurrent = 0;
+  String _currentFileName = '';
 
   @override
   void dispose() {
@@ -323,6 +324,15 @@ class _CustomizedSourcesTabState extends ConsumerState<CustomizedSourcesTab> {
                               ],
                             ),
                           ),
+                          if (_currentFileName.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: Text(
+                                'Downloading: $_currentFileName',
+                                style: const TextStyle(fontSize: 11, color: Colors.grey),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
                           const DownloadInfoWidget(),
                           const SizedBox(height: 8),
                           ElevatedButton.icon(
@@ -411,6 +421,13 @@ class _CustomizedSourcesTabState extends ConsumerState<CustomizedSourcesTab> {
       await notifier.downloadSelected(
         context,
         skipConfirmation: true,
+        onFileStarted: (name) {
+          if (mounted) {
+            setState(() {
+              _currentFileName = name;
+            });
+          }
+        },
         onDownloadComplete: () {
           if (mounted) {
             setState(() {
@@ -419,6 +436,12 @@ class _CustomizedSourcesTabState extends ConsumerState<CustomizedSourcesTab> {
           }
         },
       );
+    }
+
+    if (mounted) {
+      setState(() {
+        _currentFileName = '';
+      });
     }
   }
 

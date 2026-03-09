@@ -75,6 +75,7 @@ class _IndicDictTabState extends ConsumerState<IndicDictTab> with AutomaticKeepA
   CancelToken? _downloadCancelToken;
   int _batchTotal = 0;
   int _batchCurrent = 0;
+  String _currentFileName = '';
 
   int get _fetchedCount => _sources.where((s) => s.entries != null).length;
   int get _totalCount => _sources.length;
@@ -238,13 +239,17 @@ class _IndicDictTabState extends ConsumerState<IndicDictTab> with AutomaticKeepA
     setState(() {
       _batchTotal = selected.length;
       _batchCurrent = 0;
+      _currentFileName = '';
     });
 
     for (final entry in selected) {
       if (!mounted) break;
       if (entry.status == _DictStatus.upToDate) continue;
 
-      setState(() => entry.isDownloading = true);
+      setState(() {
+        entry.isDownloading = true;
+        _currentFileName = entry.name;
+      });
       try {
         await client.downloadDictionary(
           entry.url,
@@ -284,6 +289,12 @@ class _IndicDictTabState extends ConsumerState<IndicDictTab> with AutomaticKeepA
           });
         }
       }
+    }
+    
+    if (mounted) {
+      setState(() {
+        _currentFileName = '';
+      });
     }
     
     _downloadCancelToken = null;
@@ -451,6 +462,15 @@ class _IndicDictTabState extends ConsumerState<IndicDictTab> with AutomaticKeepA
                           ],
                         ),
                       ),
+                      if (_currentFileName.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Text(
+                            'Downloading: $_currentFileName',
+                            style: const TextStyle(fontSize: 11, color: Colors.grey),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
                       const SizedBox(height: 8),
                       const DownloadInfoWidget(),
                       const SizedBox(height: 8),
