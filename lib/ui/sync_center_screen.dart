@@ -41,6 +41,65 @@ class _SyncCenterScreenState extends ConsumerState<SyncCenterScreen> {
               ],
             ),
           ),
+          _buildFooter(context, ref),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFooter(BuildContext context, WidgetRef ref) {
+    final storageService = ref.read(storageServiceProvider);
+    final theme = Theme.of(context);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.15),
+        border: Border(
+          top: BorderSide(color: theme.colorScheme.outlineVariant, width: 0.5),
+        ),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          FutureBuilder<String>(
+            future: storageService.getStoragePathDisplay(),
+            builder: (context, snapshot) {
+              final path = snapshot.data ?? 'Loading folder path...';
+              return Row(
+                children: [
+                  Icon(Icons.folder_special_outlined, size: 14, color: theme.colorScheme.primary),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Download Directory: $path',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                        color: theme.colorScheme.onSurface,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              Icon(Icons.tips_and_updates_outlined, size: 14, color: theme.colorScheme.secondary),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text(
+                  'Use any dictionary reader (e.g. HDICT: apps.apple.com/in/app/hdict/id6759493062)',
+                  style: TextStyle(fontSize: 10, color: Colors.grey),
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );

@@ -14,7 +14,7 @@ A powerful, cross-platform utility designed for scholarly dictionary management.
 ---
 
 ## 📂 Storage & File Access
-The app automatically selects the optimal storage location for your platform, ensuring files are both secure and accessible to other dictionary readers (like Goldendict or ColorDict).
+The app automatically selects the optimal storage location for your platform, ensuring files are both secure and accessible to other dictionary readers (like [HDICT](https://apps.apple.com/in/app/hdict/id6759493062)).
 
 | Platform | Recommended Location | Access Method |
 | :--- | :--- | :--- |
@@ -55,6 +55,16 @@ Track and update dictionaries from private repositories or custom web sources.
 - **Update Detection**: The app identifies updates by comparing the **timestamp** embedded in the filename (e.g., `...__2023-12-01...`) with your local copy.
 - **Batch Progress**: During downloads, a persistent progress bar shows the overall batch status (e.g., "5/12 downloaded").
 - **Integrated Stop All**: A prominent **"Stop All"** button appears during active downloads for immediate cancellation.
+
+---
+
+## 📖 How to Use Downloaded Dictionaries
+
+Once your dictionaries are downloaded, you can use them with any dictionary reader of your choice.
+
+- **Recommended Reader**: We recommend using **[HDICT](https://apps.apple.com/in/app/hdict/id6759493062)** for the best experience on mobile and desktop.
+- **Universal Compatibility**: The downloaded files are in standard formats compatible with most readers that support StarDict, MDict, or DICTD.
+- **Accessing Files**: Refer to the **Storage & File Access** table above to find precisely where your files are stored on your device.
 
 ---
 
