@@ -183,8 +183,11 @@ class _CustomizedSourcesTabState extends ConsumerState<CustomizedSourcesTab> {
 
     return Stack(
       children: [
-        Column(
-          children: [
+        CustomScrollView(
+          slivers: [
+            SliverToBoxAdapter(
+              child: Column(
+                children: [
             // Inline Add Source Section
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -254,18 +257,26 @@ class _CustomizedSourcesTabState extends ConsumerState<CustomizedSourcesTab> {
                   ],
                 ),
               ),
-            Expanded(
-              child: sourcesAsync.when(
-                data: (sources) => sources.isEmpty
-                    ? _buildEmptyState()
-                    : ListView.builder(
-                        itemCount: sources.length,
-                        padding: const EdgeInsets.only(bottom: 80),
-                        itemBuilder: (_, i) => SourceExpansionPanel(source: sources[i]),
+            ],
+          ),
+        ),
+        sourcesAsync.when(
+              data: (sources) => sources.isEmpty
+                  ? SliverFillRemaining(
+                      hasScrollBody: false,
+                      child: _buildEmptyState(),
+                    )
+                  : SliverPadding(
+                      padding: const EdgeInsets.only(bottom: 80),
+                      sliver: SliverList(
+                        delegate: SliverChildBuilderDelegate(
+                          (_, i) => SourceExpansionPanel(source: sources[i]),
+                          childCount: sources.length,
+                        ),
                       ),
-                loading: () => _buildShimmer(),
-                error: (err, _) => Center(child: Text(err.toString())),
-              ),
+                    ),
+              loading: () => SliverToBoxAdapter(child: _buildShimmer()),
+              error: (err, _) => SliverToBoxAdapter(child: Center(child: Text(err.toString()))),
             ),
           ],
         ),
@@ -413,30 +424,35 @@ class _CustomizedSourcesTabState extends ConsumerState<CustomizedSourcesTab> {
 
   Widget _buildEmptyState() {
     return const Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.library_books_outlined, size: 64, color: Colors.grey),
-          SizedBox(height: 16),
-          Text('No customized lists yet.\nPaste links above to add your own.',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.grey, fontSize: 13)),
-        ],
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.library_books_outlined, size: 64, color: Colors.grey),
+            SizedBox(height: 16),
+            Text('No customized lists yet.\nPaste links above to add your own.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.grey, fontSize: 13)),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildShimmer() {
-    return ListView.builder(
-      itemCount: 4,
-      itemBuilder: (context, index) => Shimmer.fromColors(
-        baseColor: Colors.grey[300]!,
-        highlightColor: Colors.grey[100]!,
-        child: ListTile(
-          leading: Container(width: 40, height: 40, color: Colors.white),
-          title: Container(height: 16, color: Colors.white),
-          subtitle: Container(width: 200, height: 12, color: Colors.white),
-        ),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 80),
+      child: Column(
+        children: List.generate(4, (index) => Shimmer.fromColors(
+          baseColor: Colors.grey[300]!,
+          highlightColor: Colors.grey[100]!,
+          child: ListTile(
+            leading: Container(width: 40, height: 40, color: Colors.white),
+            title: Container(height: 16, color: Colors.white),
+            subtitle: Container(width: 200, height: 12, color: Colors.white),
+          ),
+        )),
       ),
     );
   }
