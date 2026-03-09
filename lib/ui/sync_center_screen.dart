@@ -90,7 +90,10 @@ class _SyncCenterScreenState extends ConsumerState<SyncCenterScreen> {
           ),
           const SizedBox(height: 4),
           InkWell(
-            onTap: () => launchUrl(Uri.parse('https://apps.apple.com/in/app/hdict/id6759493062')),
+            onTap: () => launchUrl(
+              Uri.parse('https://apps.apple.com/in/app/hdict/id6759493062'),
+              mode: LaunchMode.externalApplication,
+            ),
             child: Row(
               children: [
                 Icon(Icons.tips_and_updates_outlined, size: 14, color: theme.colorScheme.secondary),

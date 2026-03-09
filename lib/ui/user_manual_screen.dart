@@ -37,7 +37,10 @@ class UserManualScreen extends ConsumerWidget {
             data: snapshot.data ?? 'No guide found.',
             onTapLink: (text, href, title) {
               if (href != null) {
-                launchUrl(Uri.parse(href));
+                launchUrl(
+                  Uri.parse(href),
+                  mode: LaunchMode.externalApplication,
+                );
               }
             },
           );
