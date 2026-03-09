@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../providers/providers.dart';
 
@@ -39,11 +38,13 @@ class UserManualScreen extends ConsumerWidget {
             data: snapshot.data ?? 'No guide found.',
             onTapLink: (text, href, title) {
               if (href != null) {
-                var url = href;
-                if (Platform.isIOS && url.contains('apps.apple.com')) {
-                  url = url.replaceFirst('https://apps.apple.com', 'itms-apps://itunes.apple.com');
+                final String url;
+                if (Platform.isIOS && href.contains('apps.apple.com')) {
+                  url = href.replaceFirst('https://apps.apple.com', 'itms-apps://itunes.apple.com');
+                } else {
+                  url = href;
                 }
-                var urlFinal = url;
+                final urlFinal = url;
                 launchUrl(
                   Uri.parse(urlFinal),
                   mode: LaunchMode.externalApplication,

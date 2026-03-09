@@ -20,13 +20,15 @@ class AboutUsScreen extends ConsumerWidget {
       }
     } catch (e) {
       if (context.mounted) {
-        Clipboard.setData(ClipboardData(text: urlString));
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Could not open link. URL copied to clipboard.'),
-            duration: Duration(seconds: 3),
-          ),
-        );
+        await Clipboard.setData(ClipboardData(text: urlString));
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Could not open link. URL copied to clipboard.'),
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
       }
     }
   }

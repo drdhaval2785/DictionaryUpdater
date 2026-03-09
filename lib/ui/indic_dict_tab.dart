@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'download_info_widget.dart';
 import 'package:path/path.dart' as p;
 import '../providers/providers.dart';
 import '../services/storage_service.dart';
@@ -450,6 +451,9 @@ class _IndicDictTabState extends ConsumerState<IndicDictTab> with AutomaticKeepA
                           ],
                         ),
                       ),
+                      const SizedBox(height: 8),
+                      const DownloadInfoWidget(),
+                      const SizedBox(height: 8),
                       ElevatedButton.icon(
                         onPressed: _cancelDownloads,
                         icon: const Icon(Icons.stop),
@@ -462,16 +466,23 @@ class _IndicDictTabState extends ConsumerState<IndicDictTab> with AutomaticKeepA
                       ),
                     ],
                   )
-                : ElevatedButton.icon(
-                    onPressed: _downloadSelected,
-                    icon: const Icon(Icons.download),
-                    label: Text('Download $selectedCount (${totalSizeMb.toStringAsFixed(1)} MB)'),
-                    style: ElevatedButton.styleFrom(
-                      minimumSize: const Size.fromHeight(48),
-                      backgroundColor: Colors.indigo,
-                      foregroundColor: Colors.white,
-                    ),
-                  ),
+                    : Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const DownloadInfoWidget(),
+                          const SizedBox(height: 8),
+                          ElevatedButton.icon(
+                            onPressed: _downloadSelected,
+                            icon: const Icon(Icons.download),
+                            label: Text('Download $selectedCount (${totalSizeMb.toStringAsFixed(1)} MB)'),
+                            style: ElevatedButton.styleFrom(
+                              minimumSize: const Size.fromHeight(48),
+                              backgroundColor: Colors.indigo,
+                              foregroundColor: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
           ),
         ),
     ]);
