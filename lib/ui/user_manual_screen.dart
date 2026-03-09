@@ -1,6 +1,8 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../providers/providers.dart';
@@ -37,10 +39,35 @@ class UserManualScreen extends ConsumerWidget {
             data: snapshot.data ?? 'No guide found.',
             onTapLink: (text, href, title) {
               if (href != null) {
+                var url = href;
+                if (Platform.isIOS && url.contains('apps.apple.com')) {
+                  url = url.replaceFirst('https://apps.apple.com', 'itms-apps://itunes.apple.com');
+                }
+                var urlFinal = url;
                 launchUrl(
-                  Uri.parse(href),
+                  Uri.parse(urlFinal),
                   mode: LaunchMode.externalApplication,
-                );
+                ).then((success) {
+                  if (!success && context.mounted) {
+                    Clipboard.setData(ClipboardData(text: href));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Could not open link. URL copied to clipboard.'),
+                        duration: Duration(seconds: 3),
+                      ),
+                    );
+                  }
+                }).catchError((e) {
+                  if (context.mounted) {
+                    Clipboard.setData(ClipboardData(text: href));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Could not open link. URL copied to clipboard.'),
+                        duration: Duration(seconds: 3),
+                      ),
+                    );
+                  }
+                });
               }
             },
           );

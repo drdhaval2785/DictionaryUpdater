@@ -1,15 +1,33 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../providers/providers.dart';
 
 class AboutUsScreen extends ConsumerWidget {
   const AboutUsScreen({super.key});
 
-  Future<void> _launchUrl(String urlString) async {
-    final Uri url = Uri.parse(urlString);
-    if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
-      throw Exception('Could not launch $url');
+  Future<void> _launchUrl(String urlString, BuildContext context) async {
+    var urlStringFinal = urlString;
+    if (Platform.isIOS && urlStringFinal.contains('apps.apple.com')) {
+      urlStringFinal = urlStringFinal.replaceFirst('https://apps.apple.com', 'itms-apps://itunes.apple.com');
+    }
+    final Uri url = Uri.parse(urlStringFinal);
+    try {
+      if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
+        throw Exception('Could not launch $url');
+      }
+    } catch (e) {
+      if (context.mounted) {
+        Clipboard.setData(ClipboardData(text: urlString));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not open link. URL copied to clipboard.'),
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
     }
   }
 
@@ -66,7 +84,7 @@ class AboutUsScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: 4),
                 InkWell(
-                  onTap: () => _launchUrl('https://github.com/drdhaval2785/DictionaryUpdater'),
+                  onTap: () => _launchUrl('https://github.com/drdhaval2785/DictionaryUpdater', context),
                   child: const Text(
                     'https://github.com/drdhaval2785/DictionaryUpdater',
                     style: TextStyle(

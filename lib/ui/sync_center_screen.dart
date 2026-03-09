@@ -1,5 +1,7 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../providers/providers.dart';
@@ -90,10 +92,37 @@ class _SyncCenterScreenState extends ConsumerState<SyncCenterScreen> {
           ),
           const SizedBox(height: 4),
           InkWell(
-            onTap: () => launchUrl(
-              Uri.parse('https://apps.apple.com/in/app/hdict/id6759493062'),
-              mode: LaunchMode.externalApplication,
-            ),
+            onTap: () {
+              const url = 'https://apps.apple.com/in/app/hdict/id6759493062';
+              var uri = Uri.parse(url);
+              if (Platform.isIOS) {
+                uri = Uri.parse(url.replaceFirst('https://apps.apple.com', 'itms-apps://itunes.apple.com'));
+              }
+              launchUrl(
+                uri,
+                mode: LaunchMode.externalApplication,
+              ).then((success) {
+                if (!success && context.mounted) {
+                  Clipboard.setData(const ClipboardData(text: url));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Could not open App Store. Link copied to clipboard.'),
+                      duration: Duration(seconds: 3),
+                    ),
+                  );
+                }
+              }).catchError((e) {
+                if (context.mounted) {
+                  Clipboard.setData(const ClipboardData(text: url));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Could not open App Store. Link copied to clipboard.'),
+                      duration: Duration(seconds: 3),
+                    ),
+                  );
+                }
+              });
+            },
             child: Row(
               children: [
                 Icon(Icons.tips_and_updates_outlined, size: 14, color: theme.colorScheme.secondary),
