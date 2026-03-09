@@ -429,8 +429,7 @@ class _IndicDictTabState extends ConsumerState<IndicDictTab> with AutomaticKeepA
           }).toList(),
         ),
       ),
-      if (selectedCount > 0 || isDownloading)
-        Container(
+      Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
             color: Theme.of(context).cardColor,
@@ -490,17 +489,19 @@ class _IndicDictTabState extends ConsumerState<IndicDictTab> with AutomaticKeepA
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           const DownloadInfoWidget(),
-                          const SizedBox(height: 8),
-                          ElevatedButton.icon(
-                            onPressed: _downloadSelected,
-                            icon: const Icon(Icons.download),
-                            label: Text('Download $selectedCount (${totalSizeMb.toStringAsFixed(1)} MB)'),
-                            style: ElevatedButton.styleFrom(
-                              minimumSize: const Size.fromHeight(48),
-                              backgroundColor: Colors.indigo,
-                              foregroundColor: Colors.white,
+                          if (selectedCount > 0) ...[
+                            const SizedBox(height: 8),
+                            ElevatedButton.icon(
+                              onPressed: _downloadSelected,
+                              icon: const Icon(Icons.download),
+                              label: Text('Download $selectedCount (${totalSizeMb.toStringAsFixed(1)} MB)'),
+                              style: ElevatedButton.styleFrom(
+                                minimumSize: const Size.fromHeight(48),
+                                backgroundColor: Colors.indigo,
+                                foregroundColor: Colors.white,
+                              ),
                             ),
-                          ),
+                          ],
                         ],
                       ),
           ),

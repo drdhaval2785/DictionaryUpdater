@@ -281,8 +281,7 @@ class _CustomizedSourcesTabState extends ConsumerState<CustomizedSourcesTab> {
             ),
           ],
         ),
-        if (totalSelected > 0 || isAnyDownloading)
-          Positioned(
+        Positioned(
             left: 0,
             right: 0,
             bottom: 0,
@@ -356,17 +355,19 @@ class _CustomizedSourcesTabState extends ConsumerState<CustomizedSourcesTab> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           const DownloadInfoWidget(),
-                          const SizedBox(height: 8),
-                          ElevatedButton.icon(
-                            icon: const Icon(Icons.download_rounded),
-                            label: Text('Download $totalSelected (${totalSizeMb.toStringAsFixed(1)} MB)'),
-                            onPressed: () => _downloadAll(allSources, totalSizeMb),
-                            style: ElevatedButton.styleFrom(
-                              minimumSize: const Size.fromHeight(48),
-                              backgroundColor: Theme.of(context).colorScheme.primary,
-                              foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                          if (totalSelected > 0) ...[
+                            const SizedBox(height: 8),
+                            ElevatedButton.icon(
+                              icon: const Icon(Icons.download_rounded),
+                              label: Text('Download $totalSelected (${totalSizeMb.toStringAsFixed(1)} MB)'),
+                              onPressed: () => _downloadAll(allSources, totalSizeMb),
+                              style: ElevatedButton.styleFrom(
+                                minimumSize: const Size.fromHeight(48),
+                                backgroundColor: Theme.of(context).colorScheme.primary,
+                                foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                              ),
                             ),
-                          ),
+                          ],
                         ],
                       ),
               ),
