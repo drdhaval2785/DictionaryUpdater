@@ -170,7 +170,7 @@ void main() {
       await statusFile.writeAsString(
         jsonEncode({
           'processedFiles': ['already-done__2024-01-01.tar.gz'],
-          'failedFiles': [],
+          'failedFiles': <String>[],
           'lastRun': DateTime.now().toIso8601String(),
         }),
       );
@@ -252,6 +252,15 @@ void main() {
       expect(storageService.detectCompressionType('file.bz2'), equals('.bz2'));
       expect(storageService.detectCompressionType('file.xz'), equals('.xz'));
       expect(storageService.detectCompressionType('file.txt'), isNull);
+
+      // .dict.dz should NOT be treated as an archive - it's a dict file
+      expect(storageService.detectCompressionType('stardict.dict.dz'), isNull);
+      expect(
+        storageService.detectCompressionType('sa-IAST-kRdanta.dict.dz'),
+        isNull,
+      );
+      // Plain .dz files (like Dzip format) should still be treated as archives
+      expect(storageService.detectCompressionType('dict.dz'), equals('.dz'));
     });
 
     test(

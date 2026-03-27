@@ -320,6 +320,10 @@ class StorageService {
   /// Returns compression type for a file (e.g., '.tar.gz', '.zip', '.7z')
   String? detectCompressionType(String filename) {
     final lower = filename.toLowerCase();
+
+    // Skip .dict.dz files - they are compressed dict files, not archives
+    if (lower.endsWith('.dict.dz')) return null;
+
     const types = [
       '.tar.gz',
       '.tgz',
@@ -618,32 +622,67 @@ class StorageService {
     await for (final entity in storageDir.list(recursive: true)) {
       if (entity is File) {
         final filename = p.basename(entity.path);
+        final parentPath = p.dirname(entity.path);
+
+        // Check if this is an archive file (should be migrated)
+        final compressionType = detectCompressionType(filename);
+
+        // Skip non-archive files (like .dict.dz, .idx, etc.)
+        if (compressionType == null) {
+          continue;
+        }
 
         // Skip already processed files
         if (status.processedFiles.contains(filename)) {
-          debugPrint('Skipping already processed: $filename');
+          debugPrint(
+            'Migration: Skipping already processed archive: $filename',
+          );
           continue;
         }
 
         // Skip files marked as failed (unless we want to retry)
         if (status.failedFiles.contains(filename)) {
-          debugPrint('Skipping previously failed (will retry): $filename');
+          debugPrint(
+            'Migration: Skipping previously failed archive: $filename',
+          );
         }
-
-        final compressionType = detectCompressionType(filename);
 
         if (compressionType != null) {
           try {
-            final baseName = extractBaseName(filename);
+            var baseName = extractBaseName(filename);
+
+            // If no base name from timestamp pattern, try extracting from filename without extension
             if (baseName == null) {
-              debugPrint('Could not extract base name from: $filename');
-              status.failedFiles.add(filename);
-              failed++;
-              continue;
+              // Try: name.tar.gz -> name, name.zip -> name
+              final withoutExt = p.basenameWithoutExtension(filename);
+              // Remove any remaining compression extensions
+              baseName = withoutExt.replaceAll(
+                RegExp(r'\.(tar\.gz|tgz|tar\.bz2|tbz2|tar\.xz|txz|zip|7z)$'),
+                '',
+              );
+
+              // If still nothing, use the filename without extension
+              baseName = baseName.isNotEmpty ? baseName : withoutExt;
+
+              debugPrint('Using fallback base name: $baseName for: $filename');
             }
 
             // Get the parent directory (source folder)
             final parentDir = Directory(p.dirname(entity.path));
+
+            // Check if decompressed files already exist (user had successful migration before crash)
+            final existingDecompressed = await hasDecompressedFiles(
+              baseName,
+              sourceName: null,
+            );
+            if (existingDecompressed) {
+              debugPrint(
+                'Decompressed files already exist for: $baseName, marking as processed',
+              );
+              status.processedFiles.add(filename);
+              migrated++;
+              continue;
+            }
 
             // Decompress in place
             await decompressAndCleanup(
@@ -652,8 +691,22 @@ class StorageService {
               deleteArchive: true,
             );
 
-            // Compute MD5 and update metadata (using timestamp from filename)
-            final timestamp = extractTimestamp(filename);
+            // Use file modification date as timestamp if no timestamp in filename
+            DateTime? timestamp = extractTimestamp(filename);
+            if (timestamp == null) {
+              try {
+                final fileStat = await File(entity.path).stat();
+                // Use the file's modification time as fallback timestamp
+                // (closest available to creation time in cross-platform Dart)
+                timestamp = fileStat.modified;
+                debugPrint(
+                  'Using file modification time as timestamp for: $filename',
+                );
+              } catch (e) {
+                debugPrint('Could not get file stats: $e');
+              }
+            }
+
             await updateChecksumMetadata(
               baseName,
               '',
