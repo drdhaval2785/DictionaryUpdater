@@ -10,7 +10,8 @@ class StorageService {
 
   final Directory? _baseDirOverride;
 
-  StorageService({Directory? baseDirOverride}) : _baseDirOverride = baseDirOverride;
+  StorageService({Directory? baseDirOverride})
+    : _baseDirOverride = baseDirOverride;
 
   /// Returns the active dictionary storage directory, creating it if needed.
   Future<Directory> getStorageDirectory({String? sourceName}) async {
@@ -39,38 +40,53 @@ class StorageService {
 
   /// Returns a user-friendly string describing the storage location.
   Future<String> getStoragePathDisplay() async {
-    if (_baseDirOverride != null) return p.join(_baseDirOverride.path, _folderName);
+    if (_baseDirOverride != null) {
+      return p.join(_baseDirOverride.path, _folderName);
+    }
 
     if (Platform.isIOS) {
       return 'Files App -> On My iPhone -> Dictionary Updater -> $_folderName';
     }
-    
+
     if (Platform.isMacOS) {
-      return 'Downloads Folder -> $_folderName';
+      return 'Downloads Folder -> DictionaryData';
     }
 
-    final Directory? base;
-    if (Platform.isMacOS || Platform.isWindows || Platform.isLinux) {
-      base = await getDownloadsDirectory();
-    } else if (Platform.isAndroid) {
-      base = await getExternalStorageDirectory();
-    } else {
-      base = await getApplicationDocumentsDirectory();
+    if (Platform.isWindows || Platform.isLinux) {
+      final Directory? base = await getDownloadsDirectory();
+      if (base == null) {
+        final fallback = await getApplicationSupportDirectory();
+        return p.join(fallback.path, _folderName);
+      }
+      return p.join(base.path, _folderName);
     }
 
-    if (base == null) {
+    if (Platform.isAndroid) {
+      final base = await getExternalStorageDirectory();
+      if (base == null) {
+        final fallback = await getApplicationSupportDirectory();
+        return p.join(fallback.path, _folderName);
+      }
+      return p.join(base.path, _folderName);
+    }
+
+    try {
+      final base = await getApplicationDocumentsDirectory();
+      return p.join(base.path, _folderName);
+    } catch (e) {
       final fallback = await getApplicationSupportDirectory();
       return p.join(fallback.path, _folderName);
     }
-
-    return p.join(base.path, _folderName);
   }
 
-  Future<Directory> _resolveFinalPath(String basePath, String? sourceName) async {
+  Future<Directory> _resolveFinalPath(
+    String basePath,
+    String? sourceName,
+  ) async {
     final String fullPath = (sourceName != null && sourceName.isNotEmpty)
         ? p.join(basePath, sanitizeFolderName(sourceName))
         : basePath;
-        
+
     final dir = Directory(fullPath);
     if (!await dir.exists()) {
       await dir.create(recursive: true);
@@ -92,11 +108,12 @@ class StorageService {
   /// First checks the source-specific subfolder, then falls back to the root folder.
   Future<bool> dictionaryExists(String fileName, {String? sourceName}) async {
     final sanitizedName = sanitizeFileName(fileName);
-    
+
     // Check source-specific subfolder
     if (sourceName != null && sourceName.isNotEmpty) {
       final sourceBase = await getStorageDirectory(sourceName: sourceName);
-      if (await File(p.join(sourceBase.path, sanitizedName)).exists()) return true;
+      if (await File(p.join(sourceBase.path, sanitizedName)).exists())
+        return true;
     }
 
     // Check root folder
@@ -137,7 +154,10 @@ class StorageService {
   /// Looks for an existing file that shares the same base name but has a different
   /// full filename (likely an older timestamped version).
   /// Searches both the source-specific subfolder and the root folder.
-  Future<File?> findExistingVersion(String newFileName, {String? sourceName}) async {
+  Future<File?> findExistingVersion(
+    String newFileName, {
+    String? sourceName,
+  }) async {
     final sanitizedNewName = sanitizeFileName(newFileName);
     final targetBase = extractBaseName(sanitizedNewName);
     if (targetBase == null) return null;
@@ -145,7 +165,11 @@ class StorageService {
     // 1. Check source-specific subfolder
     if (sourceName != null && sourceName.isNotEmpty) {
       final sourceBase = await getStorageDirectory(sourceName: sourceName);
-      final found = await _findInDirectory(sourceBase, sanitizedNewName, targetBase);
+      final found = await _findInDirectory(
+        sourceBase,
+        sanitizedNewName,
+        targetBase,
+      );
       if (found != null) return found;
     }
 
@@ -154,7 +178,11 @@ class StorageService {
     return _findInDirectory(rootBase, sanitizedNewName, targetBase);
   }
 
-  Future<File?> _findInDirectory(Directory dir, String newFileName, String targetBase) async {
+  Future<File?> _findInDirectory(
+    Directory dir,
+    String newFileName,
+    String targetBase,
+  ) async {
     if (!await dir.exists()) return null;
     try {
       final List<FileSystemEntity> entities = await dir.list().toList();
@@ -162,7 +190,8 @@ class StorageService {
         if (entity is File) {
           final existingName = p.basename(entity.path);
           // Match if it's a different filename but has the same base (indic-dict pattern)
-          if (existingName != newFileName && extractBaseName(existingName) == targetBase) {
+          if (existingName != newFileName &&
+              extractBaseName(existingName) == targetBase) {
             return entity;
           }
         }
