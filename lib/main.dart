@@ -29,9 +29,14 @@ Future<void> main() async {
   // Run migration to decompress existing archive files
   final storage = StorageService();
   try {
-    final migrated = await storage.migrateToDecompressed();
-    if (migrated > 0) {
-      debugPrint('Migrated $migrated archive files to decompressed format');
+    final result = await storage.migrateToDecompressed();
+    if (result.migrated > 0) {
+      debugPrint(
+        'Migrated ${result.migrated} archive files to decompressed format',
+      );
+    }
+    if (result.failed > 0) {
+      debugPrint('Warning: ${result.failed} archive files failed to migrate');
     }
   } catch (e) {
     debugPrint('Migration error: $e');

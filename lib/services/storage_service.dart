@@ -572,21 +572,75 @@ class StorageService {
     }
   }
 
+  /// Migration status tracking
+  static const String _migrationStatusFile = 'migration_status.json';
+
+  /// Reads migration status from file
+  Future<MigrationStatus> _readMigrationStatus() async {
+    try {
+      final storageDir = await getStorageDirectory();
+      final statusFile = File(p.join(storageDir.path, _migrationStatusFile));
+      if (!await statusFile.exists()) {
+        return MigrationStatus();
+      }
+      final content = await statusFile.readAsString();
+      final json = jsonDecode(content) as Map<String, dynamic>;
+      return MigrationStatus.fromJson(json);
+    } catch (e) {
+      debugPrint('Error reading migration status: $e');
+      return MigrationStatus();
+    }
+  }
+
+  /// Saves migration status to file
+  Future<void> _saveMigrationStatus(MigrationStatus status) async {
+    try {
+      final storageDir = await getStorageDirectory();
+      final statusFile = File(p.join(storageDir.path, _migrationStatusFile));
+      await statusFile.writeAsString(jsonEncode(status.toJson()));
+    } catch (e) {
+      debugPrint('Error saving migration status: $e');
+    }
+  }
+
   /// Migration: Decompresses all archive files in storage
-  Future<int> migrateToDecompressed() async {
-    int migrated = 0;
+  /// Continues gracefully even if some files fail, tracks progress for resume
+  Future<MigrationResult> migrateToDecompressed() async {
     final storageDir = await getStorageDirectory();
 
+    // Load previous migration status
+    final status = await _readMigrationStatus();
+
     // Find all archive files recursively
+    int migrated = 0;
+    int failed = 0;
+
     await for (final entity in storageDir.list(recursive: true)) {
       if (entity is File) {
         final filename = p.basename(entity.path);
+
+        // Skip already processed files
+        if (status.processedFiles.contains(filename)) {
+          debugPrint('Skipping already processed: $filename');
+          continue;
+        }
+
+        // Skip files marked as failed (unless we want to retry)
+        if (status.failedFiles.contains(filename)) {
+          debugPrint('Skipping previously failed (will retry): $filename');
+        }
+
         final compressionType = detectCompressionType(filename);
 
         if (compressionType != null) {
           try {
             final baseName = extractBaseName(filename);
-            if (baseName == null) continue;
+            if (baseName == null) {
+              debugPrint('Could not extract base name from: $filename');
+              status.failedFiles.add(filename);
+              failed++;
+              continue;
+            }
 
             // Get the parent directory (source folder)
             final parentDir = Directory(p.dirname(entity.path));
@@ -606,15 +660,89 @@ class StorageService {
               timestamp ?? DateTime.now(),
             );
 
+            // Mark as processed
+            status.processedFiles.add(filename);
             migrated++;
             debugPrint('Migrated: $filename -> $baseName');
+
+            // Save progress periodically (every 5 files)
+            if (migrated % 5 == 0) {
+              status.lastRun = DateTime.now();
+              await _saveMigrationStatus(status);
+            }
           } catch (e) {
             debugPrint('Failed to migrate $filename: $e');
+            status.failedFiles.add(filename);
+            failed++;
+            // Continue with other files - don't break on failure
           }
         }
       }
     }
 
-    return migrated;
+    // Save final status
+    status.lastRun = DateTime.now();
+    await _saveMigrationStatus(status);
+
+    return MigrationResult(
+      migrated: migrated,
+      failed: failed,
+      totalProcessed: status.processedFiles.length,
+    );
   }
+}
+
+/// Represents migration status for tracking progress
+class MigrationStatus {
+  final Set<String> processedFiles;
+  final Set<String> failedFiles;
+  DateTime? lastRun;
+
+  MigrationStatus({
+    Set<String>? processedFiles,
+    Set<String>? failedFiles,
+    this.lastRun,
+  }) : processedFiles = processedFiles ?? {},
+       failedFiles = failedFiles ?? {};
+
+  Map<String, dynamic> toJson() => {
+    'processedFiles': processedFiles.toList(),
+    'failedFiles': failedFiles.toList(),
+    'lastRun': lastRun?.toIso8601String(),
+  };
+
+  factory MigrationStatus.fromJson(Map<String, dynamic> json) {
+    return MigrationStatus(
+      processedFiles:
+          (json['processedFiles'] as List<dynamic>?)
+              ?.map((e) => e as String)
+              .toSet() ??
+          {},
+      failedFiles:
+          (json['failedFiles'] as List<dynamic>?)
+              ?.map((e) => e as String)
+              .toSet() ??
+          {},
+      lastRun: json['lastRun'] != null
+          ? DateTime.tryParse(json['lastRun'] as String)
+          : null,
+    );
+  }
+}
+
+/// Result of migration operation
+class MigrationResult {
+  final int migrated;
+  final int failed;
+  final int totalProcessed;
+
+  MigrationResult({
+    required this.migrated,
+    required this.failed,
+    required this.totalProcessed,
+  });
+
+  @override
+  String toString() =>
+      'MigrationResult(migrated: $migrated, failed: $failed, totalProcessed: $totalProcessed)';
 }
