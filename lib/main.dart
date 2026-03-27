@@ -7,23 +7,35 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'models/dictionary_models.dart';
 import 'providers/providers.dart';
 import 'services/dictionary_registry.dart';
+import 'services/storage_service.dart';
 import 'ui/main_layout.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   final prefs = await SharedPreferences.getInstance();
   final packageInfo = await PackageInfo.fromPlatform();
-  
+
   final dir = await getApplicationDocumentsDirectory();
-  final isar = await Isar.open(
-    [DictionaryMetadataSchema, DictionarySourceSchema],
-    directory: dir.path,
-  );
+  final isar = await Isar.open([
+    DictionaryMetadataSchema,
+    DictionarySourceSchema,
+  ], directory: dir.path);
 
   // Initialize defaults
   final registry = DictionaryRegistry(isar);
   await registry.initializeDefaults();
+
+  // Run migration to decompress existing archive files
+  final storage = StorageService();
+  try {
+    final migrated = await storage.migrateToDecompressed();
+    if (migrated > 0) {
+      debugPrint('Migrated $migrated archive files to decompressed format');
+    }
+  } catch (e) {
+    debugPrint('Migration error: $e');
+  }
 
   runApp(
     ProviderScope(

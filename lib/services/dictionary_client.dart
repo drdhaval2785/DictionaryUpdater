@@ -58,7 +58,8 @@ class DictionaryClient {
       if (e.type == DioExceptionType.connectionError ||
           e.error is SocketException) {
         throw Exception(
-            'Network error: Failed to connect. Please check your internet connection.');
+          'Network error: Failed to connect. Please check your internet connection.',
+        );
       }
       throw Exception('Failed to load source list: ${e.message}');
     } catch (e) {
@@ -73,8 +74,9 @@ class DictionaryClient {
 
     // Absolute markdown links (http)
     final absMarkdown = RegExp(
-        r'\[.*?\]\(((?:https?)://[^\s)]+' + archiveExt + r')\)',
-        caseSensitive: false);
+      r'\[.*?\]\(((?:https?)://[^\s)]+' + archiveExt + r')',
+      caseSensitive: false,
+    );
     for (final m in absMarkdown.allMatches(content)) {
       final l = m.group(1);
       if (l != null) links.add(l);
@@ -83,8 +85,9 @@ class DictionaryClient {
     // Relative markdown links
     if (baseUrl.isNotEmpty) {
       final relMarkdown = RegExp(
-          r'\[.*?\]\(((?:\.{0,2}/)?[^\s)]+' + archiveExt + r')\)',
-          caseSensitive: false);
+        r'\[.*?\]\(((?:\.{0,2}/)?[^\s)]+' + archiveExt + r')',
+        caseSensitive: false,
+      );
       for (final m in relMarkdown.allMatches(content)) {
         final rel = m.group(1);
         if (rel != null && !rel.startsWith('http')) {
@@ -95,7 +98,10 @@ class DictionaryClient {
 
     // Plain absolute URLs
     // Using [^\s"'<>]+ for better boundary control
-    final plainAbs = RegExp(r'''(?:https?)://[^\s"'<>]+''' + archiveExt, caseSensitive: false);
+    final plainAbs = RegExp(
+      r'''(?:https?)://[^\s"'<>]+''' + archiveExt,
+      caseSensitive: false,
+    );
     for (final m in plainAbs.allMatches(content)) {
       links.add(m.group(0)!);
     }
@@ -124,80 +130,135 @@ class DictionaryClient {
   // ─── Status check ──────────────────────────────────────────────────────────
 
   /// Returns the update status for a dictionary file.
-  Future<DictionaryStatus> getDictionaryStatus(String url, Isar isar, {String? sourceName}) async {
+  /// Uses checksum metadata for comparison when available.
+  Future<DictionaryStatus> getDictionaryStatus(
+    String url,
+    Isar isar, {
+    String? sourceName,
+  }) async {
     final fileName = _storageService.sanitizeFileName(p.basename(url));
+    final baseName =
+        _storageService.extractBaseName(fileName) ??
+        _storageService.sanitizeFileName(fileName);
+
+    // Check if decompressed files exist locally
+    final fileExists = await _storageService.hasDecompressedFiles(
+      baseName,
+      sourceName: sourceName,
+    );
+
+    // Get upstream timestamp from filename
     final upstreamTimestamp = _storageService.extractTimestamp(fileName);
 
-    final fileExists = await _storageService.dictionaryExists(fileName, sourceName: sourceName);
+    // Get stored checksum entry
+    final storedChecksum = await _storageService.getChecksumEntry(baseName);
 
     if (!fileExists) {
-      // Check for timestamped version update
-      final existingVersion = await _storageService.findExistingVersion(fileName, sourceName: sourceName);
+      // No decompressed files found - check for old archive files
+      final existingVersion = await _storageService.findExistingVersion(
+        fileName,
+        sourceName: sourceName,
+      );
+
       if (existingVersion != null) {
-        final localTimestamp = _storageService.extractTimestamp(p.basename(existingVersion.path));
-        
-        // If we have both timestamps, compare them.
-        if (upstreamTimestamp != null && localTimestamp != null) {
-          if (upstreamTimestamp.isAfter(localTimestamp)) {
-            return DictionaryStatus.updateAvailable;
-          } else {
-            return DictionaryStatus.upToDate;
+        // We have an old version - determine if it's an update
+        if (upstreamTimestamp != null) {
+          // Compare timestamps from filename
+          final localTimestamp = _storageService.extractTimestamp(
+            _storageService.extractBaseName(p.basename(existingVersion.path)) ??
+                '',
+          );
+          if (localTimestamp != null) {
+            return upstreamTimestamp.isAfter(localTimestamp)
+                ? DictionaryStatus.updateAvailable
+                : DictionaryStatus.upToDate;
           }
         }
-        
-        // Fallback for files without timestamps in filenames
+
+        // No timestamps - use stored checksum
+        if (storedChecksum != null && storedChecksum.md5.isNotEmpty) {
+          return DictionaryStatus.updateAvailable;
+        }
+
+        // Fallback - no way to compare, assume update available
         return DictionaryStatus.updateAvailable;
       }
-      
+
       return DictionaryStatus.newFile;
     }
 
-    // File exists exactly — if it has a timestamp, it's definitely up to date
-    // because any change in content would result in a different filename (different timestamp).
+    // File exists - use checksum/timestamp for comparison
     if (upstreamTimestamp != null) {
-      return DictionaryStatus.upToDate;
-    }
-
-    // Fallback logic for non-timestamped filenames (e.g. static names)
-    // File exists — check if we have metadata
-    var query = isar.dictionaryMetadatas.filter().nameEqualTo(fileName);
-    if (sourceName != null && sourceName.isNotEmpty) {
-      query = query.sourceNameEqualTo(sourceName);
-    }
-
-    final meta = await query.findFirst();
-
-    if (meta == null) {
-      // File is on disk but no metadata — treat as up-to-date to avoid
-      // forcing re-download of files the user already has.
-      return DictionaryStatus.upToDate;
-    }
-
-    // Try to detect remote update via HEAD request and persist lastChecked
-    final now = DateTime.now();
-    DateTime? remote;
-    try {
-      remote = await checkRemoteVersion(url);
-    } catch (e) {
-      debugPrint('Error checking remote version for $url: $e');
-    }
-    await isar.writeTxn(() async {
-      final freshMeta = await query.findFirst();
-      if (freshMeta != null) {
-        freshMeta.lastChecked = now;
-        if (remote != null) freshMeta.remoteLastModified = remote;
-        await isar.dictionaryMetadatas.put(freshMeta);
+      // Compare timestamp from filename
+      if (storedChecksum != null && storedChecksum.timestamp != null) {
+        return upstreamTimestamp.isAfter(storedChecksum.timestamp!)
+            ? DictionaryStatus.updateAvailable
+            : DictionaryStatus.upToDate;
       }
-    });
-    if (remote != null && remote.isAfter(meta.lastUpdated)) {
-      return DictionaryStatus.updateAvailable;
+      // If we have upstream timestamp but no stored, likely up to date
+      // (first download after migration will set it)
+      return DictionaryStatus.upToDate;
     }
+
+    // No timestamp in filename - use HEAD request for comparison
+    // First check stored checksum (MD5 based)
+    if (storedChecksum != null && storedChecksum.md5.isNotEmpty) {
+      // We have stored MD5 - need to compare with remote
+      // This is expensive, so we check remote version
+      try {
+        final remote = await checkRemoteVersion(url);
+        if (remote != null) {
+          // Update stored timestamp with remote last-modified
+          await _storageService.updateChecksumMetadata(
+            baseName,
+            storedChecksum.md5,
+            remote,
+          );
+
+          // Compare with stored timestamp
+          if (storedChecksum.timestamp != null &&
+              remote.isAfter(storedChecksum.timestamp!)) {
+            return DictionaryStatus.updateAvailable;
+          }
+        }
+      } catch (e) {
+        debugPrint('Error checking remote version: $e');
+      }
+      return DictionaryStatus.upToDate;
+    }
+
+    // No checksum, no timestamp - check with metadata
+    final meta = await getMetadata(url, isar, sourceName: sourceName);
+    if (meta == null) {
+      return DictionaryStatus.upToDate;
+    }
+
+    // Try HEAD request
+    try {
+      final remote = await checkRemoteVersion(url);
+      if (remote != null && remote.isAfter(meta.lastUpdated)) {
+        return DictionaryStatus.updateAvailable;
+      }
+    } catch (e) {
+      debugPrint('Error checking remote version: $e');
+    }
+
     return DictionaryStatus.upToDate;
   }
 
-  Future<DictionaryMetadata?> getMetadata(String url, Isar isar, {String? sourceName}) async {
+  Future<DictionaryMetadata?> getMetadata(
+    String url,
+    Isar isar, {
+    String? sourceName,
+  }) async {
     final fileName = _storageService.sanitizeFileName(p.basename(url));
-    var query = isar.dictionaryMetadatas.filter().nameEqualTo(fileName);
+    final baseName = _storageService.extractBaseName(fileName) ?? fileName;
+
+    // Try to find by base name in source
+    var query = isar.dictionaryMetadatas.filter().nameContains(
+      baseName,
+      caseSensitive: false,
+    );
     if (sourceName != null && sourceName.isNotEmpty) {
       query = query.sourceNameEqualTo(sourceName);
     }
@@ -206,7 +267,7 @@ class DictionaryClient {
 
   // ─── Download ──────────────────────────────────────────────────────────────
 
-  /// Downloads a dictionary and persists metadata to Isar.
+  /// Downloads a dictionary, decompresses it, and persists metadata to Isar.
   Future<File> downloadDictionary(
     String url,
     Isar isar, {
@@ -214,14 +275,21 @@ class DictionaryClient {
     void Function(double)? onProgress,
     CancelToken? cancelToken,
   }) async {
-    final dir = await _storageService.getStorageDirectory(sourceName: sourceName);
+    final dir = await _storageService.getStorageDirectory(
+      sourceName: sourceName,
+    );
     final fileName = _storageService.sanitizeFileName(p.basename(url));
     final savePath = p.join(dir.path, fileName);
+    final baseName =
+        _storageService.extractBaseName(fileName) ?? fileName.split('.').first;
 
-    // Clean up old version if it exists (checks both subfolder and root via StorageService)
-    final oldVersion = await _storageService.findExistingVersion(fileName, sourceName: sourceName);
+    // Clean up old decompressed files
+    final oldVersion = await _storageService.findExistingVersion(
+      fileName,
+      sourceName: sourceName,
+    );
     if (oldVersion != null) {
-      debugPrint('Replacing old version: ${oldVersion.path} with $fileName');
+      debugPrint('Replacing old version: ${oldVersion.path}');
       try {
         if (await oldVersion.exists()) {
           await oldVersion.delete();
@@ -231,7 +299,14 @@ class DictionaryClient {
       }
     }
 
+    // Also clean up any old archive files in the folder
+    final oldArchiveFile = File(savePath);
+    if (await oldArchiveFile.exists()) {
+      await oldArchiveFile.delete();
+    }
+
     try {
+      // Download compressed file
       await _dio.download(
         url,
         savePath,
@@ -241,37 +316,77 @@ class DictionaryClient {
             onProgress(received / total);
           }
         },
-        options: Options(
-          headers: {HttpHeaders.acceptEncodingHeader: '*'},
-        ),
+        options: Options(headers: {HttpHeaders.acceptEncodingHeader: '*'}),
       );
 
-      final file = File(savePath);
-      final sizeInBytes = await file.length();
-      final sizeMb = sizeInBytes / (1024 * 1024);
+      // Compute MD5 checksum and update checksum metadata BEFORE decompression
+      // This way even if decompression fails, we still track the file
+      final computedMD5 = await _storageService.computeMD5(savePath);
 
-      // Persist metadata so next launch detects this file as up-to-date.
-      final filenameTimestamp = _storageService.extractTimestamp(fileName);
-      DateTime? remoteModified;
-      if (filenameTimestamp == null) {
+      // Extract timestamp from filename
+      DateTime? timestamp = _storageService.extractTimestamp(fileName);
+
+      // If no timestamp in filename, try HEAD request
+      if (timestamp == null) {
         try {
-          remoteModified = await checkRemoteVersion(url);
+          final remote = await checkRemoteVersion(url);
+          if (remote != null) {
+            timestamp = remote;
+          }
         } catch (_) {}
       }
 
+      // Update checksum metadata before decompression (in case it fails)
+      await _storageService.updateChecksumMetadata(
+        baseName,
+        computedMD5,
+        timestamp,
+      );
+
+      // Decompress the archive
+      debugPrint('Decompressing $fileName to ${dir.path}');
+      await _storageService.decompressAndCleanup(
+        savePath,
+        dir.path,
+        deleteArchive: true,
+      );
+
+      // Get decompressed file size (sum of all files in folder)
+      double sizeMb = 0;
+      try {
+        final files = await dir.list().toList();
+        for (final entity in files) {
+          if (entity is File) {
+            final name = p.basename(entity.path).toLowerCase();
+            // Check if it's a dictionary file
+            if (_isDictFile(name)) {
+              sizeMb += await entity.length();
+            }
+          }
+        }
+        sizeMb = sizeMb / (1024 * 1024);
+      } catch (e) {
+        debugPrint('Error calculating size: $e');
+      }
+
+      // Persist metadata so next launch detects this file as up-to-date.
       final meta = DictionaryMetadata()
-        ..name = fileName
+        ..name = baseName
         ..sourceName = sourceName
         ..remoteUrl = url
-        ..localPath = savePath
-        ..lastUpdated = filenameTimestamp ?? remoteModified ?? DateTime.now()
-        ..remoteLastModified = remoteModified
+        ..localPath = dir
+            .path // Store folder path instead of file
+        ..lastUpdated = timestamp ?? DateTime.now()
+        ..remoteLastModified = timestamp
         ..isDownloaded = true
         ..sizeMb = sizeMb;
 
       await isar.writeTxn(() => isar.dictionaryMetadatas.put(meta));
 
-      return file;
+      // Return any file in the directory as representative
+      final files = await dir.list().toList();
+      final firstFile = files.whereType<File>().firstOrNull ?? File(savePath);
+      return firstFile;
     } on DioException catch (e) {
       // Clean up partial file on failure or cancellation
       final partialFile = File(savePath);
@@ -280,14 +395,17 @@ class DictionaryClient {
       }
 
       if (e.type == DioExceptionType.cancel) {
-        rethrow; // preserve stack trace, analyzer suggests rethrow
+        rethrow;
       }
       if (e.type == DioExceptionType.connectionError ||
           e.error is SocketException) {
         throw Exception(
-            'Network error: Failed to connect. Please check your internet connection.');
+          'Network error: Failed to connect. Please check your internet connection.',
+        );
       }
-      throw Exception('Download failed (${e.type}): ${e.message ?? e.error ?? 'Unknown error'}');
+      throw Exception(
+        'Download failed (${e.type}): ${e.message ?? e.error ?? 'Unknown error'}',
+      );
     } catch (e) {
       // Clean up partial file on other errors too
       final partialFile = File(savePath);
@@ -299,7 +417,28 @@ class DictionaryClient {
     }
   }
 
-  // ─── Remote version ────────────────────────────────────────────────────────
+  bool _isDictFile(String filename) {
+    const dictExtensions = [
+      '.dict.dz',
+      '.dict',
+      '.idx',
+      '.wav',
+      '.mp3',
+      '.info',
+      '.ifo',
+      '.syn',
+      '.abs',
+      '.log',
+    ];
+    for (final ext in dictExtensions) {
+      if (filename.toLowerCase().endsWith(ext)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // ─── Remote version ───────────────────────────────────────────────────────
 
   Future<DateTime?> checkRemoteVersion(String url) async {
     try {

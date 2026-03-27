@@ -5,7 +5,7 @@ import 'package:path/path.dart' as p;
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  
+
   late StorageService storageService;
   late Directory tempDir;
 
@@ -21,17 +21,36 @@ void main() {
   });
 
   group('Indic-dict Update Logic (StorageService)', () {
-    test('extractBaseName correctly identifies the stable part of the filename', () {
-      expect(storageService.extractBaseName('abhidhAnachintAmaNi__2023-12-06.tar.gz'), 
-             equals('abhidhAnachintAmaNi'));
-      expect(storageService.extractBaseName('sa-IAST-kRdanta__v2.zip'), 
-             equals('sa-IAST-kRdanta'));
-      expect(storageService.extractBaseName('normal_file.tar.gz'), 
-             isNull); // Not an indic-dict pattern (needs __)
-    });
+    test(
+      'extractBaseName correctly identifies the stable part of the filename',
+      () {
+        expect(
+          storageService.extractBaseName(
+            'abhidhAnachintAmaNi__2023-12-06.tar.gz',
+          ),
+          equals('abhidhAnachintAmaNi'),
+        );
+        expect(
+          storageService.extractBaseName('sa-IAST-kRdanta__v2.zip'),
+          equals('sa-IAST-kRdanta'),
+        );
+        expect(
+          storageService.extractBaseName(
+            'abhidhAnachintAmaNi__2024-02-26_10-00-00Z__1MB.tar.gz',
+          ),
+          equals('abhidhAnachintAmaNi'),
+        );
+        expect(
+          storageService.extractBaseName('normal_file.tar.gz'),
+          isNull,
+        ); // Not an indic-dict pattern (needs __)
+      },
+    );
 
     test('extractTimestamp correctly parses the timestamp from filename', () {
-      final ts = storageService.extractTimestamp('anekArthadhvanimanjarI__2022-01-22_15-15-47Z__0MB.tar.gz');
+      final ts = storageService.extractTimestamp(
+        'anekArthadhvanimanjarI__2022-01-22_15-15-47Z__0MB.tar.gz',
+      );
       expect(ts, isNotNull);
       expect(ts!.isUtc, isTrue);
       expect(ts.year, 2022);
@@ -42,51 +61,152 @@ void main() {
       expect(ts.second, 47);
     });
 
-    test('findExistingVersion detects older version with different timestamp', () async {
-      const oldName = 'abhidhAnachintAmaNi__2023-12-06_13-57-22Z__0MB.tar.gz';
-      const newName = 'abhidhAnachintAmaNi__2024-02-26_10-00-00Z__1MB.tar.gz';
+    test(
+      'getBaseNameFromDictFile extracts base name from decompressed dictionary files',
+      () {
+        expect(
+          storageService.getBaseNameFromDictFile('sa-IAST-kRdanta.dict.dz'),
+          equals('sa-IAST-kRdanta'),
+        );
+        expect(
+          storageService.getBaseNameFromDictFile('abhidhAnachintAmaNi.idx'),
+          equals('abhidhAnachintAmaNi'),
+        );
+        expect(
+          storageService.getBaseNameFromDictFile('dict.wav'),
+          equals('dict'),
+        );
+        expect(
+          storageService.getBaseNameFromDictFile('random.txt'),
+          isNull,
+        ); // Not a dictionary file
+      },
+    );
 
-      final storageDir = p.join(tempDir.path, 'DictionaryData');
-      
-      // 1. Create the "old" file on disk
-      final oldFile = File(p.join(storageDir, oldName));
-      await oldFile.create(recursive: true);
-      
-      // 2. Search for existing version of the "new" file
-      final found = await storageService.findExistingVersion(newName);
-      
-      expect(found, isNotNull, reason: 'Should find the old version even with different timestamp');
-      expect(p.basename(found!.path), equals(oldName));
+    test(
+      'hasDecompressedFiles finds decompressed files in source folder',
+      () async {
+        const sourceName = 'Indic-dict_English-Sanskrit';
+        final sourceDir = p.join(tempDir.path, 'DictionaryData', sourceName);
+
+        // Create decompressed dictionary files
+        await File(
+          p.join(sourceDir, 'sa-IAST-kRdanta.dict.dz'),
+        ).create(recursive: true);
+        await File(
+          p.join(sourceDir, 'sa-IAST-kRdanta.idx'),
+        ).create(recursive: true);
+
+        final exists = await storageService.hasDecompressedFiles(
+          'sa-IAST-kRdanta',
+          sourceName: sourceName,
+        );
+        expect(exists, isTrue, reason: 'Should find decompressed files');
+      },
+    );
+
+    test(
+      'hasDecompressedFiles finds decompressed files in root folder',
+      () async {
+        final rootDir = p.join(tempDir.path, 'DictionaryData');
+
+        // Create decompressed dictionary files in root
+        await File(
+          p.join(rootDir, 'some-dict.dict.dz'),
+        ).create(recursive: true);
+        await File(p.join(rootDir, 'some-dict.idx')).create(recursive: true);
+
+        final exists = await storageService.hasDecompressedFiles('some-dict');
+        expect(
+          exists,
+          isTrue,
+          reason: 'Should find decompressed files in root',
+        );
+      },
+    );
+
+    test(
+      'hasDecompressedFiles returns false when no decompressed files exist',
+      () async {
+        final rootDir = p.join(tempDir.path, 'DictionaryData');
+        await Directory(rootDir).create(recursive: true);
+
+        final exists = await storageService.hasDecompressedFiles('nonexistent');
+        expect(exists, isFalse);
+      },
+    );
+
+    test('detectCompressionType correctly identifies archive types', () {
+      expect(
+        storageService.detectCompressionType('file.tar.gz'),
+        equals('.tar.gz'),
+      );
+      expect(storageService.detectCompressionType('file.tgz'), equals('.tgz'));
+      expect(storageService.detectCompressionType('file.zip'), equals('.zip'));
+      expect(
+        storageService.detectCompressionType('file.tar.bz2'),
+        equals('.tar.bz2'),
+      );
+      expect(storageService.detectCompressionType('file.7z'), equals('.7z'));
+      expect(storageService.detectCompressionType('file.txt'), isNull);
     });
 
-    test('findExistingVersion returns null if exact file already exists', () async {
-      const fileName = 'exact_match__2023.tar.gz';
-      final storageDir = p.join(tempDir.path, 'DictionaryData');
-      final file = File(p.join(storageDir, fileName));
-      await file.create(recursive: true);
+    test('findExistingVersion finds old decompressed version', () async {
+      const sourceName = 'Indic-dict_English-Sanskrit';
+      final sourceDir = p.join(tempDir.path, 'DictionaryData', sourceName);
 
-      final found = await storageService.findExistingVersion(fileName);
-      expect(found, isNull, reason: 'Should return null if the exact file is already there (no replacement needed)');
+      // Create old decompressed file
+      await File(
+        p.join(sourceDir, 'abhidhAnachintAmaNi.dict.dz'),
+      ).create(recursive: true);
+
+      // Search for new archive name
+      final found = await storageService.findExistingVersion(
+        'abhidhAnachintAmaNi__2024-02-26_10-00-00Z__1MB.tar.gz',
+        sourceName: sourceName,
+      );
+
+      expect(
+        found,
+        isNotNull,
+        reason: 'Should find the old decompressed version',
+      );
+    });
+  });
+
+  group('Checksum Metadata', () {
+    test(
+      'updateChecksumMetadata and readChecksumMetadata work correctly',
+      () async {
+        const baseName = 'test-dict';
+        const md5 = 'abc123';
+        final timestamp = DateTime(2024, 1, 1);
+
+        await storageService.updateChecksumMetadata(baseName, md5, timestamp);
+
+        final metadata = await storageService.readChecksumMetadata();
+        expect(metadata.containsKey(baseName), isTrue);
+        expect(metadata[baseName]!.md5, equals(md5));
+        expect(metadata[baseName]!.timestamp, equals(timestamp));
+      },
+    );
+
+    test('getChecksumEntry returns correct entry', () async {
+      const baseName = 'test-dict';
+      await storageService.updateChecksumMetadata(
+        baseName,
+        'md5hash',
+        DateTime(2024, 1, 1),
+      );
+
+      final entry = await storageService.getChecksumEntry(baseName);
+      expect(entry, isNotNull);
+      expect(entry!.baseName, equals(baseName));
     });
 
-    test('dictionaryExists finds files in root when sourceName is provided', () async {
-      const fileName = 'root_file__2023.zip';
-      final rootDir = p.join(tempDir.path, 'DictionaryData');
-      await File(p.join(rootDir, fileName)).create(recursive: true);
-
-      final exists = await storageService.dictionaryExists(fileName, sourceName: 'SomeSource');
-      expect(exists, isTrue, reason: 'Should find the file in root even if sourceName is SomeSource');
-    });
-
-    test('findExistingVersion finds old version in root when searching from source subfolder', () async {
-      const oldName = 'base_name__old.zip';
-      const newName = 'base_name__new.zip';
-      final rootDir = p.join(tempDir.path, 'DictionaryData');
-      await File(p.join(rootDir, oldName)).create(recursive: true);
-
-      final found = await storageService.findExistingVersion(newName, sourceName: 'SomeSource');
-      expect(found, isNotNull);
-      expect(p.basename(found!.path), equals(oldName));
+    test('getChecksumEntry returns null for non-existent entry', () async {
+      final entry = await storageService.getChecksumEntry('nonexistent');
+      expect(entry, isNull);
     });
   });
 }

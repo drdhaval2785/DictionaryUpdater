@@ -6,7 +6,6 @@ import 'package:path/path.dart' as p;
 import 'package:dictionary_updater/services/dictionary_client.dart';
 import 'package:dictionary_updater/services/storage_service.dart';
 
-// Use Fake instead of Mock to avoid need for build_runner
 class FakeDio extends Fake implements Dio {
   @override
   Future<Response<dynamic>> download(
@@ -23,7 +22,12 @@ class FakeDio extends Fake implements Dio {
   }) async {
     final file = File(savePath.toString());
     await file.create(recursive: true);
-    return Response<dynamic>(requestOptions: RequestOptions(path: urlPath), statusCode: 200);
+    // Write some dummy content so MD5 can be computed
+    await file.writeAsBytes([1, 2, 3, 4, 5]);
+    return Response<dynamic>(
+      requestOptions: RequestOptions(path: urlPath),
+      statusCode: 200,
+    );
   }
 
   @override
@@ -46,7 +50,10 @@ class FakeDio extends Fake implements Dio {
 
 class FakeIsar extends Fake implements Isar {
   @override
-  Future<T> writeTxn<T>(Future<T> Function() callback, {bool silent = false}) async {
+  Future<T> writeTxn<T>(
+    Future<T> Function() callback, {
+    bool silent = false,
+  }) async {
     return callback();
   }
 
@@ -55,7 +62,7 @@ class FakeIsar extends Fake implements Isar {
 
   @override
   dynamic noSuchMethod(Invocation invocation) {
-    if (invocation.memberName == #dictionaryMetadatas || invocation.memberName == #dictionaryMetadatas) {
+    if (invocation.memberName == #dictionaryMetadatas) {
       return FakeCollection<dynamic>();
     }
     return super.noSuchMethod(invocation);
@@ -65,17 +72,18 @@ class FakeIsar extends Fake implements Isar {
 class FakeCollection<T> extends Fake implements IsarCollection<T> {
   @override
   Future<int> put(T object) async => 1;
-  
+
   @override
   QueryBuilder<T, T, QFilterCondition> filter() {
-    return FakeQueryBuilder<T, T, QFilterCondition>() as QueryBuilder<T, T, QFilterCondition>;
+    return FakeQueryBuilder<T, T, QFilterCondition>()
+        as QueryBuilder<T, T, QFilterCondition>;
   }
 }
 
 class FakeQueryBuilder<T, R, S> extends Fake implements QueryBuilder<T, R, S> {
   @override
   dynamic noSuchMethod(Invocation invocation) => this;
-  
+
   Future<R?> findFirst() async => null;
 }
 
@@ -102,61 +110,140 @@ void main() {
     }
   });
 
-  test('downloadDictionary deletes old timestamped version before downloading new one', () async {
-    const oldName = 'abhidhAnachintAmaNi__2023-12-06.tar.gz';
-    const newName = 'abhidhAnachintAmaNi__2024-02-26.tar.gz';
-    const url = 'https://example.com/$newName';
-    
-    final storageDir = p.join(tempDir.path, 'DictionaryData');
-    final oldFile = File(p.join(storageDir, oldName));
-    await oldFile.create(recursive: true);
+  test(
+    'downloadDictionary creates decompressed files and updates checksum metadata',
+    () async {
+      const archiveName = 'abhidhAnachintAmaNi__2024-02-26.tar.gz';
+      const url = 'https://example.com/$archiveName';
 
-    expect(await oldFile.exists(), isTrue, reason: 'Old file should exist before download');
+      final storageDir = p.join(tempDir.path, 'DictionaryData');
 
-    // Run download
-    await client.downloadDictionary(url, fakeIsar);
+      // Run download (will fail decompression but should still update metadata)
+      try {
+        await client.downloadDictionary(url, fakeIsar);
+      } catch (_) {
+        // Expected to fail with fake archive data
+      }
 
-    // VERIFY: The old file should have been deleted by DictionaryClient.downloadDictionary
-    expect(await oldFile.exists(), isFalse, reason: 'The old timestamped version should be deleted');
-    
-    final newFile = File(p.join(storageDir, newName));
-    expect(await newFile.exists(), isTrue, reason: 'New version should be present');
+      // Verify checksum metadata was updated even if decompression failed
+      final checksumEntry = await storageService.getChecksumEntry(
+        'abhidhAnachintAmaNi',
+      );
+      expect(
+        checksumEntry,
+        isNotNull,
+        reason: 'Checksum entry should be created',
+      );
+      expect(checksumEntry!.md5, isNotEmpty, reason: 'MD5 should be computed');
+      expect(
+        checksumEntry.timestamp,
+        isNotNull,
+        reason: 'Timestamp should be extracted from filename',
+      );
+    },
+  );
+
+  group('getDictionaryStatus with decompressed files', () {
+    test(
+      'identifies upToDate when decompressed files exist with matching timestamp',
+      () async {
+        const baseName = 'dict';
+        const sourceName = 'Indic-dict_English';
+        final storageDir = p.join(tempDir.path, 'DictionaryData', sourceName);
+
+        // Create decompressed files
+        await File(
+          p.join(storageDir, '$baseName.dict.dz'),
+        ).create(recursive: true);
+        await File(p.join(storageDir, '$baseName.idx')).create(recursive: true);
+
+        // Update checksum with a timestamp that matches upstream
+        final timestamp = DateTime.utc(2023, 1, 1, 12, 0, 0);
+        await storageService.updateChecksumMetadata(
+          baseName,
+          'some-md5',
+          timestamp,
+        );
+
+        final url =
+            'https://example.com/dict__2023-01-01_12-00-00Z__0MB.tar.gz';
+        final status = await client.getDictionaryStatus(
+          url,
+          fakeIsar,
+          sourceName: sourceName,
+        );
+        expect(status, equals(DictionaryStatus.upToDate));
+      },
+    );
+
+    test(
+      'identifies updateAvailable when decompressed files are older than upstream',
+      () async {
+        const baseName = 'dict';
+        const sourceName = 'Indic-dict_English';
+        final storageDir = p.join(tempDir.path, 'DictionaryData', sourceName);
+
+        // Create decompressed files
+        await File(
+          p.join(storageDir, '$baseName.dict.dz'),
+        ).create(recursive: true);
+
+        // Update checksum with older timestamp
+        final oldTimestamp = DateTime.utc(2022, 1, 1, 12, 0, 0);
+        await storageService.updateChecksumMetadata(
+          baseName,
+          'some-md5',
+          oldTimestamp,
+        );
+
+        // Upstream has newer timestamp
+        final url =
+            'https://example.com/dict__2024-01-01_12-00-00Z__0MB.tar.gz';
+        final status = await client.getDictionaryStatus(
+          url,
+          fakeIsar,
+          sourceName: sourceName,
+        );
+        expect(status, equals(DictionaryStatus.updateAvailable));
+      },
+    );
+
+    test('identifies newFile when no decompressed files exist', () async {
+      const url = 'https://example.com/new-dict__2024-01-01.tar.gz';
+      final status = await client.getDictionaryStatus(url, fakeIsar);
+      expect(status, equals(DictionaryStatus.newFile));
+    });
   });
 
-  group('getDictionaryStatus with filename timestamps', () {
-    test('identifies update available when upstream timestamp is newer', () async {
-      const oldName = 'dict__2022-01-01_12-00-00Z__0MB.tar.gz';
-      const newName = 'dict__2023-01-01_12-00-00Z__0MB.tar.gz';
-      final url = 'https://example.com/$newName';
-      
+  group('Checksum metadata for status checking', () {
+    test('uses checksum timestamp for comparison when available', () async {
+      const baseName = 'test-dict';
       final storageDir = p.join(tempDir.path, 'DictionaryData');
-      await File(p.join(storageDir, oldName)).create(recursive: true);
 
+      // Create decompressed files
+      await File(
+        p.join(storageDir, '$baseName.dict.dz'),
+      ).create(recursive: true);
+      await File(p.join(storageDir, '$baseName.idx')).create(recursive: true);
+
+      // Set stored checksum with a timestamp
+      final storedTimestamp = DateTime.utc(2023, 6, 15, 12, 0, 0);
+      await storageService.updateChecksumMetadata(
+        baseName,
+        'abc123',
+        storedTimestamp,
+      );
+
+      // Upstream file has older timestamp
+      final url =
+          'https://example.com/test-dict__2023-01-01_12-00-00Z__1MB.tar.gz';
       final status = await client.getDictionaryStatus(url, fakeIsar);
-      expect(status, equals(DictionaryStatus.updateAvailable));
-    });
 
-    test('identifies up to date when upstream timestamp is older or same as local', () async {
-      const oldName = 'dict__2023-01-01_12-00-00Z__0MB.tar.gz';
-      const newName = 'dict__2022-01-01_12-00-00Z__0MB.tar.gz'; // Older upstream
-      final url = 'https://example.com/$newName';
-      
-      final storageDir = p.join(tempDir.path, 'DictionaryData');
-      await File(p.join(storageDir, oldName)).create(recursive: true);
-
-      final status = await client.getDictionaryStatus(url, fakeIsar);
-      expect(status, equals(DictionaryStatus.upToDate));
-    });
-
-    test('identifies up to date when exact file exists with timestamp', () async {
-      const fileName = 'shared__2023-01-01_12-00-00Z__0MB.tar.gz';
-      final url = 'https://example.com/$fileName';
-      
-      final storageDir = p.join(tempDir.path, 'DictionaryData');
-      await File(p.join(storageDir, fileName)).create(recursive: true);
-
-      final status = await client.getDictionaryStatus(url, fakeIsar);
-      expect(status, equals(DictionaryStatus.upToDate));
+      expect(
+        status,
+        equals(DictionaryStatus.upToDate),
+        reason: 'Stored timestamp is newer than upstream',
+      );
     });
   });
 }
