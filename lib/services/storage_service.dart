@@ -609,11 +609,22 @@ class StorageService {
 
   /// Migration: Decompresses all archive files in storage
   /// Continues gracefully even if some files fail, tracks progress for resume
+  /// Skips entirely if migration was previously completed
   Future<MigrationResult> migrateToDecompressed() async {
-    final storageDir = await getStorageDirectory();
-
     // Load previous migration status
     final status = await _readMigrationStatus();
+
+    // Skip entire migration if already complete
+    if (status.isMigrationComplete) {
+      debugPrint('Migration: Already completed, skipping');
+      return MigrationResult(
+        migrated: 0,
+        failed: 0,
+        totalProcessed: status.processedFiles.length,
+      );
+    }
+
+    final storageDir = await getStorageDirectory();
 
     // Find all archive files recursively
     int migrated = 0;
@@ -733,6 +744,15 @@ class StorageService {
       }
     }
 
+    // Check if there are any remaining archive files to process
+    final hasRemainingArchives = await _hasRemainingArchives(status);
+
+    // If no remaining archives and no failures, mark migration as complete
+    if (!hasRemainingArchives && failed == 0) {
+      status.isMigrationComplete = true;
+      debugPrint('Migration: All archives processed, marking as complete');
+    }
+
     // Save final status
     status.lastRun = DateTime.now();
     await _saveMigrationStatus(status);
@@ -743,6 +763,25 @@ class StorageService {
       totalProcessed: status.processedFiles.length,
     );
   }
+
+  /// Checks if there are any archive files not yet processed
+  Future<bool> _hasRemainingArchives(MigrationStatus status) async {
+    try {
+      final storageDir = await getStorageDirectory();
+      await for (final entity in storageDir.list(recursive: true)) {
+        if (entity is File) {
+          final filename = p.basename(entity.path);
+          if (detectCompressionType(filename) != null &&
+              !status.processedFiles.contains(filename)) {
+            return true; // Found an unprocessed archive
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Error checking remaining archives: $e');
+    }
+    return false;
+  }
 }
 
 /// Represents migration status for tracking progress
@@ -750,11 +789,13 @@ class MigrationStatus {
   final Set<String> processedFiles;
   final Set<String> failedFiles;
   DateTime? lastRun;
+  bool isMigrationComplete;
 
   MigrationStatus({
     Set<String>? processedFiles,
     Set<String>? failedFiles,
     this.lastRun,
+    this.isMigrationComplete = false,
   }) : processedFiles = processedFiles ?? {},
        failedFiles = failedFiles ?? {};
 
@@ -762,6 +803,7 @@ class MigrationStatus {
     'processedFiles': processedFiles.toList(),
     'failedFiles': failedFiles.toList(),
     'lastRun': lastRun?.toIso8601String(),
+    'isMigrationComplete': isMigrationComplete,
   };
 
   factory MigrationStatus.fromJson(Map<String, dynamic> json) {
@@ -779,6 +821,7 @@ class MigrationStatus {
       lastRun: json['lastRun'] != null
           ? DateTime.tryParse(json['lastRun'] as String)
           : null,
+      isMigrationComplete: json['isMigrationComplete'] as bool? ?? false,
     );
   }
 }
