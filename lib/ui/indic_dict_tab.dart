@@ -51,7 +51,8 @@ class _DictEntry {
   final String date;
   double sizeMb;
   final String folderPath;
-  final _DictStatus status;
+  _DictStatus
+  status; // Made mutable for real-time status updates during download
 
   bool isSelected = false;
   bool isDownloading = false;
@@ -290,6 +291,8 @@ class _IndicDictTabState extends ConsumerState<IndicDictTab>
         if (mounted) {
           setState(() {
             entry.isSelected = false;
+            // Update status to upToDate so stats reflect the download in real-time
+            entry.status = _DictStatus.upToDate;
           });
         }
         if (mounted) {
